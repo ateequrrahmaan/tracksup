@@ -1,0 +1,85 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with global attributes",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "phone": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "email"]
+    },
+    "Organization": {
+      "title": "Organization",
+      "description": "Tenant organization",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "ownerId"]
+    },
+    "Membership": {
+      "title": "Membership",
+      "description": "Link between user and organization",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "organizationId": { "type": "string" },
+        "role": { "type": "string", "enum": ["supplier", "employee", "retailer"] },
+        "status": { "type": "string", "enum": ["active", "suspended"] }
+      },
+      "required": ["userId", "organizationId", "role", "status"]
+    },
+    "Invite": {
+      "title": "Invite",
+      "description": "Organization invitation for new members",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "organizationId": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string" },
+        "token": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "accepted", "expired", "rejected"] },
+        "expiresAt": { "type": "string", "format": "date-time" },
+        "invitedBy": { "type": "string" }
+      }
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Delivery order scoped to organization",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "organizationId": { "type": "string" },
+        "supplierId": { "type": "string" },
+        "retailerId": { "type": "string" },
+        "employeeId": { "type": "string" },
+        "retailerName": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "assigned", "out_for_delivery", "delivered"] },
+        "totalAmount": { "type": "number" },
+        "deliveryDate": { "type": "string", "format": "date" },
+        "items": { "type": "array" },
+        "payment_status": { "type": "string", "enum": ["paid", "unpaid", "credit"] },
+        "amount_collected": { "type": "number" },
+        "delivered_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["organizationId", "supplierId", "retailerId", "status", "totalAmount"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": { "schema": "User", "description": "Global user profiles" },
+    "/organizations/{orgId}": { "schema": "Organization", "description": "Tenant metadata" },
+    "/memberships/{membershipId}": { "schema": "Membership", "description": "User-Org mappings" },
+    "/invites/{inviteId}": { "schema": "Invite", "description": "Pending invitations" },
+    "/orders/{orderId}": { "schema": "Order", "description": "Multi-tenant orders" }
+  }
+}
