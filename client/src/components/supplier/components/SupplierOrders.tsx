@@ -1,5 +1,6 @@
 import React from "react";
 import { Order, SystemUser } from "@/types";
+import { formatCurrency } from "@/constants";
 import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -42,7 +43,7 @@ export const SupplierOrders: React.FC<SupplierOrdersProps> = ({
             <Search className="h-full w-full" />
           </div>
           <Input 
-            placeholder="Search manifests by ID or Node..." 
+            placeholder="Search orders by ID or Retailer..." 
             className="pl-14 rounded-2xl h-14 border-none bg-zinc-50 font-black text-xs uppercase italic tracking-widest focus-visible:ring-2 focus-visible:ring-zinc-900/5 transition-all"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -51,10 +52,10 @@ export const SupplierOrders: React.FC<SupplierOrdersProps> = ({
         <div className="flex flex-wrap gap-4">
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-[180px] rounded-2xl h-14 border-none bg-zinc-50 font-black uppercase text-[10px] tracking-widest italic px-6 shadow-sm">
-              <SelectValue placeholder="Manifest Status" />
+              <SelectValue placeholder="Order Status" />
             </SelectTrigger>
             <SelectContent className="rounded-2xl border-none shadow-2xl p-2">
-              <SelectItem value="all" className="font-black uppercase text-[9px] tracking-widest py-3">ALL REGISTRY</SelectItem>
+              <SelectItem value="all" className="font-black uppercase text-[9px] tracking-widest py-3">ALL ORDERS</SelectItem>
               <SelectItem value="pending" className="font-black uppercase text-[9px] tracking-widest py-3">PENDING</SelectItem>
               <SelectItem value="assigned" className="font-black uppercase text-[9px] tracking-widest py-3">ASSIGNED</SelectItem>
               <SelectItem value="out_for_delivery" className="font-black uppercase text-[9px] tracking-widest py-3">IN TRANSIT</SelectItem>
@@ -63,13 +64,13 @@ export const SupplierOrders: React.FC<SupplierOrdersProps> = ({
           </Select>
           <Select value={paymentFilter} onValueChange={setPaymentFilter}>
             <SelectTrigger className="w-[180px] rounded-2xl h-14 border-none bg-zinc-50 font-black uppercase text-[10px] tracking-widest italic px-6 shadow-sm">
-              <SelectValue placeholder="Settlement Type" />
+              <SelectValue placeholder="Payment Type" />
             </SelectTrigger>
             <SelectContent className="rounded-2xl border-none shadow-2xl p-2">
               <SelectItem value="all" className="font-black uppercase text-[9px] tracking-widest py-3">ALL PAYMENTS</SelectItem>
-              <SelectItem value="paid" className="font-black uppercase text-[9px] tracking-widest py-3">FINALIZED (PAID)</SelectItem>
-              <SelectItem value="unpaid" className="font-black uppercase text-[9px] tracking-widest py-3">OUTSTANDING (UNPAID)</SelectItem>
-              <SelectItem value="credit" className="font-black uppercase text-[9px] tracking-widest py-3">BUFFER (CREDIT)</SelectItem>
+              <SelectItem value="paid" className="font-black uppercase text-[9px] tracking-widest py-3">PAID</SelectItem>
+              <SelectItem value="unpaid" className="font-black uppercase text-[9px] tracking-widest py-3">UNPAID</SelectItem>
+              <SelectItem value="credit" className="font-black uppercase text-[9px] tracking-widest py-3">CREDIT</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -79,12 +80,12 @@ export const SupplierOrders: React.FC<SupplierOrdersProps> = ({
         <Table>
           <TableHeader className="bg-zinc-900">
             <TableRow className="hover:bg-zinc-900 border-none h-16">
-              <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 px-10">ID Manifest</TableHead>
-              <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 px-10">Retailer Node</TableHead>
-              <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 px-10">Operational Status</TableHead>
-              <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 px-10">Settlement</TableHead>
-              <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 px-10">Tactical Agent</TableHead>
-              <TableHead className="text-right text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 px-10">Total Value</TableHead>
+              <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 px-10">Order ID</TableHead>
+              <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 px-10">Retailer</TableHead>
+              <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 px-10">Delivery Status</TableHead>
+              <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 px-10">Payment</TableHead>
+              <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 px-10">Assigned To</TableHead>
+              <TableHead className="text-right text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 px-10">Total Amount</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -95,12 +96,12 @@ export const SupplierOrders: React.FC<SupplierOrdersProps> = ({
                 onClick={() => onOrderSelect(order)}
               >
                 <TableCell className="px-10">
-                  <span className="font-mono text-[10px] font-black text-zinc-400 bg-zinc-100 px-3 py-1.5 rounded-lg uppercase tracking-wider">#{order.id.slice(-8).toUpperCase()}</span>
+                  <span className="font-mono text-[10px] font-black text-zinc-500 bg-zinc-100 px-3 py-1.5 rounded-lg uppercase tracking-wider">#{order.id.slice(-8).toUpperCase()}</span>
                 </TableCell>
                 <TableCell className="px-10">
                   <div className="flex flex-col">
                     <span className="font-black text-zinc-900 uppercase italic text-sm group-hover:text-primary transition-colors">{order.retailerName}</span>
-                    <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest italic mt-0.5">Deployment: {order.deliveryDate}</span>
+                    <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest italic mt-0.5">Scheduled: {order.deliveryDate}</span>
                   </div>
                 </TableCell>
                 <TableCell className="px-10">
@@ -143,7 +144,7 @@ export const SupplierOrders: React.FC<SupplierOrdersProps> = ({
                        <SelectItem value="unassigned" className="font-black uppercase text-[9px] tracking-widest py-3">
                          <div className="flex items-center gap-2 text-zinc-400">
                            <AlertCircle className="h-3 w-3" />
-                           UNASSIGNED
+                           NOT ASSIGNED
                          </div>
                        </SelectItem>
                        {employees.map(emp => (
@@ -161,7 +162,7 @@ export const SupplierOrders: React.FC<SupplierOrdersProps> = ({
                 </TableCell>
                 <TableCell className="px-10 text-right">
                   <div className="flex items-center justify-end gap-5 group-hover:translate-x-2 transition-all">
-                    <span className="font-black text-zinc-900 text-lg italic tracking-tighter">${order.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                    <span className="font-black text-zinc-900 text-lg italic tracking-tighter">{formatCurrency(order.totalAmount, order.currency)}</span>
                     <div className="h-8 w-8 rounded-xl bg-zinc-50 flex items-center justify-center group-hover:bg-zinc-900 group-hover:text-white transition-colors">
                         <ChevronRight className="h-4 w-4" />
                     </div>
@@ -176,7 +177,7 @@ export const SupplierOrders: React.FC<SupplierOrdersProps> = ({
                       <div className="h-20 w-20 rounded-[2rem] border-4 border-dashed border-zinc-400 flex items-center justify-center mb-6">
                         <Search className="h-8 w-8" />
                       </div>
-                      <p className="text-[10px] font-black uppercase tracking-[0.3em] italic">Zero matching manifests detected in sector</p>
+                      <p className="text-[10px] font-black uppercase tracking-[0.3em] italic">No matching orders found</p>
                    </div>
                 </TableCell>
               </TableRow>

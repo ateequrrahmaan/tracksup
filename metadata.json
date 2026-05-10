@@ -1,6 +1,6 @@
 {
   "name": "Tracksup",
-  "description": "Professional supply chain and delivery management platform. Track deliveries, manage employees, and handle digital invoices in one unified terminal.",
+  "description": "Professional supply chain and delivery management platform. Retailers can connect to multiple suppliers, while suppliers manage deliveries, employees, and digital invoices in one unified terminal.",
   "requestFramePermissions": [
     "camera",
     "geolocation"

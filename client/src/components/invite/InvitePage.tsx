@@ -105,7 +105,7 @@ export const InvitePage = () => {
   };
 
   if (loading) {
-    return <div className="flex min-h-screen items-center justify-center">Verifying invite...</div>;
+    return <div className="flex min-h-screen items-center justify-center">Checking invitation...</div>;
   }
 
   if (error) {
@@ -114,7 +114,7 @@ export const InvitePage = () => {
         <Card className="max-w-md w-full border-red-100 bg-red-50/10">
           <CardHeader className="text-center">
             <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-            <CardTitle>Invite Error</CardTitle>
+            <CardTitle>Invitation Error</CardTitle>
             <CardDescription>{error}</CardDescription>
           </CardHeader>
           <CardFooter>
@@ -133,15 +133,15 @@ export const InvitePage = () => {
         <Card className="max-w-md w-full">
           <CardHeader className="text-center">
             <Package2 className="h-12 w-12 text-primary mx-auto mb-4" />
-            <CardTitle>Invitation Received</CardTitle>
+            <CardTitle>You're Invited!</CardTitle>
             <CardDescription>
-              You have been invited to join <strong>{org?.name}</strong> as an <strong>{invite?.role}</strong>.
+              You've been invited to join <strong>{org?.name}</strong> as a <strong>{invite?.role}</strong>.
             </CardDescription>
           </CardHeader>
           <CardContent className="text-center space-y-4">
-            <p className="text-sm text-zinc-500">Please sign in or create an account to accept this invitation.</p>
+            <p className="text-sm text-zinc-500">Please log in or create an account to join.</p>
             <Button className="w-full" onClick={() => window.location.href = `/?token=${token}&auth=true`}>
-              Login / Sign Up
+              Log In / Sign Up
             </Button>
           </CardContent>
         </Card>
@@ -179,9 +179,9 @@ export const InvitePage = () => {
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary mb-4">
             <CheckCircle className="h-8 w-8" />
           </div>
-          <CardTitle className="text-2xl font-bold">Accept Invitation</CardTitle>
+          <CardTitle className="text-2xl font-bold">Join the Team</CardTitle>
           <CardDescription className="text-lg">
-            Join <span className="font-semibold text-zinc-900">{org?.name}</span> as <span className="capitalize text-primary">{invite?.role}</span>
+            Join <span className="font-semibold text-zinc-900">{org?.name}</span> as a <span className="capitalize text-primary">{invite?.role}</span>
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-6 space-y-4">
@@ -198,7 +198,7 @@ export const InvitePage = () => {
         </CardContent>
         <CardFooter className="flex flex-col gap-3">
           <Button className="w-full h-12" onClick={handleAccept}>
-            Accept & Join Organization
+            Join Team
             <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
           <Button className="w-full" variant="ghost" onClick={() => window.location.href = "/"}>

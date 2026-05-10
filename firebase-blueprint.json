@@ -73,6 +73,22 @@
         "delivered_at": { "type": "string", "format": "date-time" }
       },
       "required": ["organizationId", "supplierId", "retailerId", "status", "totalAmount"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Product offered by a supplier",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "supplierId": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "price": { "type": "number" },
+        "currency": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["supplierId", "name", "price", "currency"]
     }
   },
   "firestore": {
@@ -80,6 +96,7 @@
     "/organizations/{orgId}": { "schema": "Organization", "description": "Tenant metadata" },
     "/memberships/{membershipId}": { "schema": "Membership", "description": "User-Org mappings" },
     "/invites/{inviteId}": { "schema": "Invite", "description": "Pending invitations" },
-    "/orders/{orderId}": { "schema": "Order", "description": "Multi-tenant orders" }
+    "/orders/{orderId}": { "schema": "Order", "description": "Multi-tenant orders" },
+    "/products/{productId}": { "schema": "Product", "description": "Supplier product catalog" }
   }
 }

@@ -24,18 +24,18 @@ export const SupplierOutstanding: React.FC<SupplierOutstandingProps> = ({
     <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
         <Card className="md:col-span-4 border-none shadow-2xl bg-white rounded-[2.5rem] p-10 flex flex-col justify-center">
-           <p className="text-[11px] font-black uppercase tracking-[0.3em] text-zinc-400 mb-2 italic">Total Sector Risk</p>
+           <p className="text-[11px] font-black uppercase tracking-[0.3em] text-zinc-500 mb-2 italic">Total Unpaid Amount</p>
            <p className="text-5xl font-black italic tracking-tighter text-rose-600">${stats.outstandingAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
         </Card>
         <div className="md:col-span-8 bg-zinc-900 rounded-[2.5rem] p-10 text-white flex items-center justify-between shadow-2xl relative overflow-hidden group">
            <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(245,158,11,0.15),transparent)]" />
-           <div className="relative z-10">
-              <p className="text-[11px] font-black uppercase tracking-[0.3em] text-zinc-500 mb-2 italic">Node Integrity Warning</p>
-              <p className="text-3xl font-black italic tracking-tighter group-hover:text-orange-400 transition-colors">
-                {outstandingOrders.length} Manifests Awaiting Settlement
-              </p>
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-600 mt-2">Critical intervention required for aged liquidity units</p>
-           </div>
+            <div className="relative z-10">
+               <p className="text-[11px] font-black uppercase tracking-[0.3em] text-white/50 mb-2 italic">Payment Reminder</p>
+               <p className="text-3xl font-black italic tracking-tighter group-hover:text-orange-400 transition-colors">
+                 {outstandingOrders.length} Orders Awaiting Payment
+               </p>
+               <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/40 mt-2">Follow up required for aging invoices</p>
+            </div>
            <div className="relative z-10 h-20 w-20 rounded-[2rem] bg-orange-500/10 flex items-center justify-center border border-orange-500/20">
             <AlertTriangle className="h-10 w-10 text-orange-500 animate-pulse" />
            </div>
@@ -46,11 +46,11 @@ export const SupplierOutstanding: React.FC<SupplierOutstandingProps> = ({
         <Table>
           <TableHeader className="bg-zinc-900">
             <TableRow className="h-16 border-none">
-              <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 px-10">Retailer Node</TableHead>
-              <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 px-10">ID Manifest</TableHead>
-              <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 px-10">Chronological Age</TableHead>
-              <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 px-10">Partial Collection</TableHead>
-              <TableHead className="text-right text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 px-10">Deficit Balance</TableHead>
+              <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 px-10">Retailer</TableHead>
+              <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 px-10">Order ID</TableHead>
+              <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 px-10">Days Pending</TableHead>
+              <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 px-10">Amount Collected</TableHead>
+              <TableHead className="text-right text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 px-10">Balance Due</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -67,11 +67,11 @@ export const SupplierOutstanding: React.FC<SupplierOutstandingProps> = ({
                   >
                     <TableCell className="px-10 font-black uppercase italic text-sm group-hover:text-primary transition-colors">{order.retailerName}</TableCell>
                     <TableCell className="px-10">
-                       <span className="font-mono text-[10px] font-bold text-zinc-400 bg-zinc-100 px-3 py-1 rounded-lg uppercase tracking-wider">#{order.id.slice(-8).toUpperCase()}</span>
+                       <span className="font-mono text-[10px] font-bold text-zinc-500 bg-zinc-100 px-3 py-1 rounded-lg uppercase tracking-wider">#{order.id.slice(-8).toUpperCase()}</span>
                     </TableCell>
                     <TableCell className="px-10">
                        <Badge variant={daysPending > 7 ? "destructive" : "warning"} className="rounded-xl text-[9px] font-black uppercase tracking-widest italic h-7 px-4 border-none shadow-sm">
-                         {daysPending} Solar Cycles Active
+                         {daysPending} Days Open
                        </Badge>
                     </TableCell>
                     <TableCell className="px-10 font-black italic tracking-tighter text-emerald-600">
@@ -90,7 +90,7 @@ export const SupplierOutstanding: React.FC<SupplierOutstandingProps> = ({
                       <div className="h-20 w-20 rounded-[2rem] border-4 border-dashed border-emerald-400 flex items-center justify-center mb-6">
                         <Clock className="h-8 w-8 text-emerald-500" />
                       </div>
-                      <p className="text-[10px] font-black uppercase tracking-[0.3em] italic">All nodes synchronized - zero outstanding risk</p>
+                      <p className="text-[10px] font-black uppercase tracking-[0.3em] italic">All payments synchronized - zero outstanding balance</p>
                    </div>
                 </TableCell>
               </TableRow>

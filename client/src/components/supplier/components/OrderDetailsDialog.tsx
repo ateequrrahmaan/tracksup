@@ -1,5 +1,6 @@
 import React from "react";
 import { Order, SystemUser } from "@/types";
+import { formatCurrency, getCurrencySymbol } from "@/constants";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -67,14 +68,14 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({ order, e
                 <div key={idx} className="flex items-center justify-between p-4 bg-white hover:bg-zinc-50 transition-colors">
                   <div className="flex flex-col">
                     <span className="font-black text-zinc-900 uppercase italic text-sm">{item.name}</span>
-                    <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">{item.quantity} units @ ${item.price.toFixed(2)}</span>
+                    <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">{item.quantity} units @ {formatCurrency(item.price, order.currency)}</span>
                   </div>
-                  <span className="font-black text-zinc-900 italic tracking-tighter">${(item.quantity * item.price).toFixed(2)}</span>
+                  <span className="font-black text-zinc-900 italic tracking-tighter">{formatCurrency(item.quantity * item.price, order.currency)}</span>
                 </div>
               ))}
               <div className="flex items-center justify-between p-6 bg-zinc-900 text-white">
-                <span className="font-black uppercase text-[10px] tracking-[0.2em] italic opacity-50">Total Capital Value</span>
-                <span className="text-2xl font-black italic tracking-tighter">${order.totalAmount?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                <span className="font-black uppercase text-[10px] tracking-[0.2em] italic opacity-50">Total Capital Value ({order.currency || 'USD'})</span>
+                <span className="text-2xl font-black italic tracking-tighter">{formatCurrency(order.totalAmount, order.currency)}</span>
               </div>
             </div>
           </div>
@@ -84,7 +85,7 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({ order, e
             <div className="grid grid-cols-3 gap-4">
               <Card className="p-4 border-none shadow-sm bg-emerald-500/5 rounded-2xl">
                 <p className="text-[9px] font-black text-emerald-600 uppercase mb-2 tracking-widest">Collected</p>
-                <p className="text-xl font-black text-emerald-900 italic tracking-tighter">${(order.amount_collected || 0).toLocaleString()}</p>
+                <p className="text-xl font-black text-emerald-900 italic tracking-tighter">{formatCurrency(order.amount_collected || 0, order.currency)}</p>
               </Card>
               <Card className="p-4 border-none shadow-sm bg-blue-500/5 rounded-2xl">
                 <p className="text-[9px] font-black text-blue-600 uppercase mb-2 tracking-widest">Settlement</p>
@@ -92,7 +93,7 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({ order, e
               </Card>
               <Card className="p-4 border-none shadow-sm bg-rose-500/5 rounded-2xl">
                 <p className="text-[9px] font-black text-rose-600 uppercase mb-2 tracking-widest">Awaiting</p>
-                <p className="text-xl font-black text-rose-900 italic tracking-tighter">${(order.totalAmount - (order.amount_collected || 0)).toLocaleString()}</p>
+                <p className="text-xl font-black text-rose-900 italic tracking-tighter">{formatCurrency(order.totalAmount - (order.amount_collected || 0), order.currency)}</p>
               </Card>
             </div>
           </div>

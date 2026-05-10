@@ -16,6 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Order, SystemUser } from "@/types";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { formatCurrency, getCurrencySymbol } from "@/constants";
 import { DashboardLayout } from "../shared/DashboardLayout";
 
 const getPaymentBadge = (status?: string) => {
@@ -33,6 +34,10 @@ interface OrderDetailModalProps {
   onOpenChange: (open: boolean) => void;
   onGenerateInvoice: (order: Order) => void;
 }
+
+import { RetailerSuppliers } from "./components/RetailerSuppliers";
+import { RetailerMarketplace } from "./components/RetailerMarketplace";
+import { SettingsView } from "../shared/SettingsView";
 
 const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ order, isOpen, onOpenChange, onGenerateInvoice }) => {
   if (!order) return null;
@@ -79,36 +84,36 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ order, isOpen, onOp
           </div>
 
           <div className="border rounded-lg p-4 bg-zinc-50/50">
-            <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-3">Order Breakdown</h4>
+            <h4 className="text-xs font-bold text-zinc-600 uppercase tracking-wider mb-3">Order Breakdown</h4>
             <div className="space-y-2">
               {order.items?.map((item, idx) => (
                 <div key={`modal-item-${idx}`} className="flex justify-between text-sm">
-                  <span className="text-zinc-600">{item.name} × {item.quantity}</span>
-                  <span className="font-medium">${(item.price * item.quantity).toFixed(2)}</span>
+                  <span className="text-zinc-700">{item.name} × {item.quantity}</span>
+                  <span className="font-medium">{formatCurrency(item.price * item.quantity, order.currency)}</span>
                 </div>
               ))}
               <div className="pt-2 border-t flex justify-between font-bold text-zinc-900">
                 <span>Total Amount</span>
-                <span>${order.totalAmount.toFixed(2)}</span>
+                <span>{formatCurrency(order.totalAmount, order.currency)}</span>
               </div>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
-              <p className="text-[10px] font-bold text-zinc-500 uppercase">Payment Info</p>
+              <p className="text-[10px] font-bold text-zinc-600 uppercase">Payment Info</p>
               <div className="flex flex-col gap-1">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-semibold">Status:</span>
                   {getPaymentBadge(order.payment_status)}
                 </div>
-                <p className="text-sm text-zinc-600">Collected: ${order.amount_collected?.toFixed(2) || "0.00"}</p>
+                <p className="text-sm text-zinc-700">Collected: {formatCurrency(order.amount_collected || 0, order.currency)}</p>
               </div>
             </div>
             <div className="space-y-1">
-              <p className="text-[10px] font-bold text-zinc-500 uppercase">Delivery Info</p>
+              <p className="text-[10px] font-bold text-zinc-600 uppercase">Delivery Info</p>
               <p className="text-sm font-semibold">Date: {order.delivered_at ? format(new Date(order.delivered_at), 'PPP') : 'Not yet'}</p>
-              <p className="text-sm text-zinc-600">Agent ID: {order.employeeId?.slice(-6).toUpperCase() || 'Assigned'}</p>
+              <p className="text-sm text-zinc-700">Agent ID: {order.employeeId?.slice(-6).toUpperCase() || 'Assigned'}</p>
             </div>
           </div>
         </div>
@@ -125,6 +130,121 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ order, isOpen, onOp
   );
 };
 
+interface InvoicePreviewModalProps {
+  order: Order | null;
+  orgName?: string;
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+  onDownload: (order: Order) => void;
+}
+
+const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({ order, orgName, isOpen, onOpenChange, onDownload }) => {
+  if (!order) return null;
+  const symbol = getCurrencySymbol(order.currency);
+  
+  return (
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto p-0 border-none shadow-2xl">
+        <div className="bg-white p-8 md:p-12">
+          {/* Invoice Header */}
+          <div className="flex justify-between items-start mb-12">
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <div className="h-10 w-10 bg-zinc-900 text-white rounded-xl flex items-center justify-center">
+                  <Package className="h-6 w-6" />
+                </div>
+                <span className="text-2xl font-black italic uppercase tracking-tighter">TracksUp</span>
+              </div>
+              <h1 className="text-4xl font-black uppercase italic tracking-tighter text-zinc-900">INVOICE</h1>
+            </div>
+            <div className="text-right">
+              <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1">Invoice Number</p>
+              <p className="font-black italic uppercase tracking-tight text-lg underline decoration-zinc-100 decoration-4 underline-offset-4">#{order.id.slice(0, 12).toUpperCase()}</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mt-4 mb-1">Issue Date</p>
+              <p className="font-bold text-sm">{format(order.createdAt?.toDate ? order.createdAt.toDate() : new Date(), 'PPP')}</p>
+            </div>
+          </div>
+
+          {/* Billing Info */}
+          <div className="grid grid-cols-2 gap-12 mb-12 pb-12 border-b border-zinc-100">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-4">Issued By</p>
+              <p className="font-black italic uppercase text-lg">{orgName || "TracksUp Logistics"}</p>
+              <p className="text-sm text-zinc-500 mt-1">Network Verified Provider</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-4">Billed To</p>
+              <p className="font-black italic uppercase text-lg">{order.retailerName || "Valued Retailer"}</p>
+              <p className="text-sm text-zinc-500 mt-1">Authorized Logistics Endpoint</p>
+            </div>
+          </div>
+
+          {/* Table */}
+          <div className="mb-12">
+             <Table>
+                <TableHeader className="bg-zinc-50 border-y border-zinc-100">
+                  <TableRow>
+                    <TableHead className="font-black text-[10px] uppercase tracking-widest text-zinc-500 h-12">Description</TableHead>
+                    <TableHead className="font-black text-[10px] uppercase tracking-widest text-zinc-500 h-12 text-center">Quantity</TableHead>
+                    <TableHead className="font-black text-[10px] uppercase tracking-widest text-zinc-500 h-12 text-right">Price</TableHead>
+                    <TableHead className="font-black text-[10px] uppercase tracking-widest text-zinc-500 h-12 text-right">Amount</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {order.items?.map((item, idx) => (
+                    <TableRow key={`invoice-item-${idx}`} className="border-b border-zinc-50">
+                      <TableCell className="py-6">
+                        <p className="font-black italic uppercase text-xs text-zinc-900">{item.name}</p>
+                        <p className="text-[9px] text-zinc-400 font-bold uppercase tracking-widest mt-1">Logistics Unit</p>
+                      </TableCell>
+                      <TableCell className="text-center font-bold text-sm">{item.quantity}</TableCell>
+                      <TableCell className="text-right font-bold text-sm">{symbol}{item.price.toFixed(2)}</TableCell>
+                      <TableCell className="text-right font-black italic text-sm">{symbol}{(item.quantity * item.price).toFixed(2)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+             </Table>
+          </div>
+
+          {/* Summary */}
+          <div className="flex justify-end mb-12">
+             <div className="w-full max-w-xs space-y-3 bg-zinc-900 text-white p-8 rounded-3xl shadow-2xl relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-white/5 rounded-full -mr-12 -mt-12" />
+                <div className="flex justify-between items-center opacity-60">
+                   <span className="text-[10px] font-black uppercase tracking-widest">Subtotal</span>
+                   <span className="text-xs font-bold">{formatCurrency(order.totalAmount, order.currency)}</span>
+                </div>
+                <div className="flex justify-between items-center opacity-60">
+                   <span className="text-[10px] font-black uppercase tracking-widest">Network Tax</span>
+                   <span className="text-xs font-bold">$0.00</span>
+                </div>
+                <div className="pt-4 mt-4 border-t border-white/10 flex justify-between items-end">
+                   <span className="text-[10px] font-black uppercase tracking-widest mb-1.5 leading-none">Grand Total</span>
+                   <span className="text-3xl font-black italic tracking-tighter leading-none">{formatCurrency(order.totalAmount, order.currency)}</span>
+                </div>
+             </div>
+          </div>
+
+          <div className="text-center">
+            <p className="text-[10px] font-black uppercase tracking-[0.4em] text-zinc-300 italic">
+              Verification Hash: {order.id.toUpperCase()}
+            </p>
+          </div>
+        </div>
+        <div className="bg-zinc-50 p-6 flex justify-end gap-3 rounded-b-3xl">
+           <Button variant="ghost" className="font-black uppercase tracking-widest text-[10px] italic h-12 px-8 rounded-xl" onClick={() => onOpenChange(false)}>
+              Close Preview
+           </Button>
+           <Button className="font-black uppercase tracking-widest text-[10px] italic h-12 px-8 rounded-xl bg-zinc-900 shadow-xl" onClick={() => onDownload(order)}>
+              <Download className="mr-2 h-4 w-4" />
+              Download PDF
+           </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
 export const RetailerDashboard = () => {
   const { user, memberships, activeOrg, switchOrg } = useAuth();
   const [activeTab, setActiveTab] = useState("overview");
@@ -132,6 +252,14 @@ export const RetailerDashboard = () => {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [historyFilter, setHistoryFilter] = useState("all");
+  const [targetSupplierId, setTargetSupplierId] = useState<string | null>(null);
+  const [isInvoiceOpen, setIsInvoiceOpen] = useState(false);
+  const [selectedInvoiceOrder, setSelectedInvoiceOrder] = useState<Order | null>(null);
+
+  const handleViewMarketplace = (supplierId: string) => {
+    setTargetSupplierId(supplierId);
+    setActiveTab("marketplace");
+  };
 
   useEffect(() => {
     if (!user || !activeOrg) return;
@@ -171,11 +299,13 @@ export const RetailerDashboard = () => {
     doc.text(order.retailerName, 20, 65);
     doc.text(user?.email || "", 20, 70);
 
+    const symbol = getCurrencySymbol(order.currency);
+
     const tableData = order.items?.map((item: any) => [
       item.name,
       item.quantity,
-      `$${item.price.toFixed(2)}`,
-      `$${(item.quantity * item.price).toFixed(2)}`
+      `${symbol}${item.price.toFixed(2)}`,
+      `${symbol}${(item.quantity * item.price).toFixed(2)}`
     ]) || [];
 
     autoTable(doc, {
@@ -186,7 +316,7 @@ export const RetailerDashboard = () => {
 
     const finalY = (doc as any).lastAutoTable.finalY + 10;
     doc.setFontSize(14);
-    doc.text(`GRAND TOTAL: $${order.totalAmount.toFixed(2)}`, 140, finalY);
+    doc.text(`GRAND TOTAL: ${formatCurrency(order.totalAmount, order.currency)}`, 140, finalY);
 
     doc.setFontSize(8);
     doc.text("Thank you for choosing TracksUp!", 105, finalY + 20, { align: "center" });
@@ -220,7 +350,7 @@ export const RetailerDashboard = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
               <Card className="border-none shadow-sm bg-white overflow-hidden rounded-3xl group hover:scale-[1.02] transition-all">
                 <CardHeader className="pb-2">
-                  <CardDescription className="text-[10px] font-black uppercase text-zinc-400 tracking-widest">Aggregate Orders</CardDescription>
+                  <CardDescription className="text-[10px] font-black uppercase text-zinc-500 tracking-widest">Aggregate Orders</CardDescription>
                   <CardTitle className="text-3xl font-black italic tracking-tighter">{stats.totalOrders}</CardTitle>
                 </CardHeader>
                 <div className="px-6 pb-4">
@@ -231,7 +361,7 @@ export const RetailerDashboard = () => {
               </Card>
               <Card className="border-none shadow-sm bg-white overflow-hidden rounded-3xl group hover:scale-[1.02] transition-all">
                 <CardHeader className="pb-2">
-                  <CardDescription className="text-[10px] font-black uppercase text-zinc-400 tracking-widest">Active Transit</CardDescription>
+                  <CardDescription className="text-[10px] font-black uppercase text-zinc-500 tracking-widest">Active Transit</CardDescription>
                   <CardTitle className="text-3xl font-black italic tracking-tighter">{stats.activeDeliveries}</CardTitle>
                 </CardHeader>
                 <div className="px-6 pb-4">
@@ -242,8 +372,8 @@ export const RetailerDashboard = () => {
               </Card>
               <Card className="border-none shadow-sm bg-white overflow-hidden rounded-3xl group hover:scale-[1.02] transition-all">
                 <CardHeader className="pb-2">
-                  <CardDescription className="text-[10px] font-black uppercase text-zinc-400 tracking-widest">Gross Expenditure</CardDescription>
-                  <CardTitle className="text-3xl font-black italic tracking-tighter">${stats.totalSpent.toFixed(0)}</CardTitle>
+                  <CardDescription className="text-[10px] font-black uppercase text-zinc-500 tracking-widest">Gross Expenditure</CardDescription>
+                  <CardTitle className="text-3xl font-black italic tracking-tighter">{formatCurrency(stats.totalSpent)}</CardTitle>
                 </CardHeader>
                 <div className="px-6 pb-4">
                   <div className="h-1.5 w-full bg-zinc-50 rounded-full overflow-hidden">
@@ -253,8 +383,8 @@ export const RetailerDashboard = () => {
               </Card>
               <Card className="border-none shadow-sm bg-rose-50 overflow-hidden rounded-3xl group hover:scale-[1.02] transition-all">
                 <CardHeader className="pb-2">
-                  <CardDescription className="text-[10px] font-black uppercase text-rose-400 tracking-widest">Pending Settlement</CardDescription>
-                  <CardTitle className="text-3xl font-black italic tracking-tighter text-rose-600">${stats.pendingPayments.toFixed(0)}</CardTitle>
+                  <CardDescription className="text-[10px] font-black uppercase text-rose-500 tracking-widest">Pending Settlement</CardDescription>
+                  <CardTitle className="text-3xl font-black italic tracking-tighter text-rose-600">{formatCurrency(stats.pendingPayments)}</CardTitle>
                 </CardHeader>
                 <div className="px-6 pb-4">
                   <div className="h-1.5 w-full bg-rose-100 rounded-full overflow-hidden">
@@ -288,7 +418,7 @@ export const RetailerDashboard = () => {
                           </div>
                         </div>
                         <div className="flex items-center gap-4">
-                           <p className="text-sm font-black italic tracking-tighter">${order.totalAmount.toFixed(2)}</p>
+                           <p className="text-sm font-black italic tracking-tighter">{formatCurrency(order.totalAmount, order.currency)}</p>
                            <ChevronRight className="h-4 w-4 text-zinc-200 group-hover:translate-x-1 transition-all" />
                         </div>
                       </div>
@@ -320,7 +450,7 @@ export const RetailerDashboard = () => {
           </div>
         )}
 
-        {activeTab === "tracking" && (
+        {(activeTab === "orders" || activeTab === "tracking") && (
           <div className="space-y-6">
             <div className="grid grid-cols-1 gap-6">
               {orders.filter(o => o.status !== 'delivered').map(order => {
@@ -398,7 +528,7 @@ export const RetailerDashboard = () => {
           </div>
         )}
 
-        {activeTab === "history" && (
+        {(activeTab === "history" || activeTab === "invites") && (
           <div className="space-y-6">
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-xl font-black uppercase italic tracking-tight">Archive Registry</h3>
@@ -440,7 +570,7 @@ export const RetailerDashboard = () => {
                         </div>
                         <div className="text-right">
                           <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-1 italic">Total Capital</p>
-                          <p className="text-lg font-black italic tracking-tighter">${order.totalAmount.toFixed(2)}</p>
+                          <p className="text-lg font-black italic tracking-tighter">{formatCurrency(order.totalAmount, order.currency)}</p>
                         </div>
                         <ChevronRight className="h-5 w-5 text-zinc-200 group-hover:translate-x-1 transition-all" />
                       </div>
@@ -481,10 +611,10 @@ export const RetailerDashboard = () => {
                 <Table>
                   <TableHeader className="bg-zinc-900">
                     <TableRow>
-                      <TableHead className="font-black text-[10px] uppercase tracking-widest text-zinc-500 px-8 h-14">Order ID</TableHead>
-                      <TableHead className="font-black text-[10px] uppercase tracking-widest text-zinc-500 px-8 h-14">Entry Date</TableHead>
-                      <TableHead className="font-black text-[10px] uppercase tracking-widest text-zinc-500 px-8 h-14 text-center">Status</TableHead>
-                      <TableHead className="font-black text-[10px] uppercase tracking-widest text-zinc-500 px-8 h-14 text-right">Value</TableHead>
+                      <TableHead className="font-black text-[10px] uppercase tracking-widest text-zinc-400 px-8 h-14">Order ID</TableHead>
+                      <TableHead className="font-black text-[10px] uppercase tracking-widest text-zinc-400 px-8 h-14">Entry Date</TableHead>
+                      <TableHead className="font-black text-[10px] uppercase tracking-widest text-zinc-400 px-8 h-14 text-center">Status</TableHead>
+                      <TableHead className="font-black text-[10px] uppercase tracking-widest text-zinc-400 px-8 h-14 text-right">Value</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -525,8 +655,11 @@ export const RetailerDashboard = () => {
                           <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">Billed: {order.createdAt?.toDate ? format(order.createdAt.toDate(), 'PPP') : '...'}</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-8">
-                        <p className="text-lg font-black italic tracking-tighter hidden sm:block">${order.totalAmount.toFixed(2)}</p>
+                      <div className="flex items-center gap-3">
+                        <p className="text-lg font-black italic tracking-tighter hidden sm:block mr-4">${order.totalAmount.toFixed(2)}</p>
+                        <Button variant="ghost" size="icon" className="h-12 w-12 rounded-xl text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100" onClick={() => { setSelectedInvoiceOrder(order); setIsInvoiceOpen(true); }}>
+                          <Eye className="h-6 w-6" />
+                        </Button>
                         <Button variant="ghost" size="icon" className="h-12 w-12 rounded-xl text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100" onClick={() => generateInvoice(order)}>
                           <Download className="h-6 w-6" />
                         </Button>
@@ -539,12 +672,28 @@ export const RetailerDashboard = () => {
           </div>
         )}
 
+        {activeTab === "suppliers" && <RetailerSuppliers onViewMarketplace={handleViewMarketplace} />}
+
+        {activeTab === "marketplace" && <RetailerMarketplace initialSupplierId={targetSupplierId} />}
+
+        {activeTab === "settings" && <SettingsView />}
+
         {selectedOrder && (
           <OrderDetailModal 
             order={selectedOrder} 
             isOpen={isDetailOpen} 
             onOpenChange={setIsDetailOpen} 
             onGenerateInvoice={generateInvoice}
+          />
+        )}
+
+        {selectedInvoiceOrder && (
+          <InvoicePreviewModal
+            order={selectedInvoiceOrder}
+            orgName={activeOrg?.name}
+            isOpen={isInvoiceOpen}
+            onOpenChange={setIsInvoiceOpen}
+            onDownload={generateInvoice}
           />
         )}
       </div>

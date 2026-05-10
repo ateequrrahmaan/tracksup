@@ -51,6 +51,7 @@ export interface Order {
   employeeId?: string;
   status: "pending" | "assigned" | "out_for_delivery" | "delivered";
   totalAmount: number;
+  currency: string;
   items: OrderItem[];
   deliveryDate: string;
   payment_status?: "paid" | "unpaid" | "credit";
@@ -58,4 +59,15 @@ export interface Order {
   delivered_at?: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
+}
+
+export interface Product {
+  id: string;
+  supplierId: string;
+  name: string;
+  description: string;
+  price: number;
+  currency: string;
+  imageUrl?: string;
+  createdAt: Timestamp;
 }

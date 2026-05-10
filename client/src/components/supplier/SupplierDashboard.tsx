@@ -18,6 +18,8 @@ import { SupplierOutstanding } from "./components/SupplierOutstanding";
 import { SupplierInsights } from "./components/SupplierInsights";
 import { SupplierNetwork } from "./components/SupplierNetwork";
 import { SupplierInvites } from "./components/SupplierInvites";
+import { SupplierProducts } from "./components/SupplierProducts";
+import { SettingsView } from "../shared/SettingsView";
 
 export const SupplierDashboard = () => {
   const { user, activeOrg } = useAuth();
@@ -288,6 +290,14 @@ export const SupplierDashboard = () => {
             stats={stats} 
         />
       )}
+      {activeTab === "products" && (
+        <SupplierProducts 
+          orders={orders} 
+          employees={employees}
+          onPaymentStatusUpdate={updatePaymentStatus}
+          onEmployeeAssign={assignEmployee}
+        />
+      )}
       {activeTab === "invites" && (
         <SupplierInvites 
             invites={invites} 
@@ -300,6 +310,7 @@ export const SupplierDashboard = () => {
             onDeleteInvite={deleteInvite}
         />
       )}
+      {activeTab === "settings" && <SettingsView />}
 
       {/* Dialogs */}
       <OrderDetailsDialog 

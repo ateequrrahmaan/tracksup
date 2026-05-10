@@ -25,11 +25,11 @@ export const SupplierInvites: React.FC<SupplierInvitesProps> = ({
       <div className="flex flex-col md:flex-row justify-between items-center bg-zinc-900 rounded-[3rem] p-12 text-white shadow-2xl relative overflow-hidden group">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_0%_0%,rgba(59,130,246,0.1),transparent)]" />
         <div className="relative z-10">
-          <h3 className="text-3xl font-black uppercase italic tracking-tighter">Node Expansion Registry</h3>
-          <p className="text-[11px] font-bold uppercase tracking-[0.4em] text-zinc-500 mt-3 italic">Provision and coordinate organizational operational entryways</p>
+          <h3 className="text-3xl font-black uppercase italic tracking-tighter">Team & Partner Invites</h3>
+          <p className="text-[11px] font-bold uppercase tracking-[0.4em] text-white/50 mt-3 italic">Manage access for your organization and retail partners</p>
         </div>
         <Button onClick={onInviteOpen} className="relative z-10 rounded-2xl h-16 px-10 bg-white text-zinc-900 hover:bg-zinc-100 font-black uppercase text-[11px] tracking-[0.2em] shadow-xl group-hover:scale-105 transition-all mt-8 md:mt-0">
-           <Plus className="mr-4 h-6 w-6" /> Initialize Entry Key
+           <Plus className="mr-4 h-6 w-6" /> Create Invite
         </Button>
       </div>
 
@@ -37,10 +37,10 @@ export const SupplierInvites: React.FC<SupplierInvitesProps> = ({
         <Table>
           <TableHeader className="bg-zinc-50">
             <TableRow className="h-16 border-none">
-              <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 px-12">Authorized Entity</TableHead>
-              <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 px-12">Operational Class</TableHead>
-              <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 px-12">Temporal Decay</TableHead>
-              <TableHead className="text-right text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 px-12">Administrative Vector</TableHead>
+              <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 px-12">Invited Email</TableHead>
+              <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 px-12">Role</TableHead>
+              <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 px-12">Expires At</TableHead>
+              <TableHead className="text-right text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 px-12">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -49,7 +49,7 @@ export const SupplierInvites: React.FC<SupplierInvitesProps> = ({
                 <TableCell className="px-12">
                     <div className="flex flex-col">
                         <span className="font-black uppercase italic text-sm text-zinc-900">{invite.email}</span>
-                        <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest mt-0.5">Token: {invite.token.substring(0, 8)}...</span>
+                        <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest mt-0.5">Token: {invite.token.substring(0, 8)}...</span>
                     </div>
                 </TableCell>
                 <TableCell className="px-12 capitalize">
@@ -59,15 +59,15 @@ export const SupplierInvites: React.FC<SupplierInvitesProps> = ({
                      {invite.role}
                    </Badge>
                 </TableCell>
-                <TableCell className="px-12 font-bold text-zinc-400 text-xs italic uppercase tracking-tighter">
+                <TableCell className="px-12 font-bold text-zinc-500 text-xs italic uppercase tracking-tighter">
                   {invite.expiresAt?.toDate ? format(invite.expiresAt.toDate(), 'PP p') : 'Syncing...'}
                 </TableCell>
                 <TableCell className="px-12 text-right">
                   <div className="flex justify-end gap-4">
-                    <Button variant="ghost" size="icon" className="h-12 w-12 rounded-2xl hover:bg-zinc-900 hover:text-white text-zinc-300 transition-all shadow-sm" onClick={() => onCopyLink(invite.token)}>
+                    <Button variant="ghost" size="icon" className="h-12 w-12 rounded-2xl hover:bg-zinc-900 hover:text-white text-zinc-400 transition-all shadow-sm" onClick={() => onCopyLink(invite.token)}>
                       <Copy className="h-5 w-5" />
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-12 w-12 rounded-2xl hover:bg-rose-500 hover:text-white text-zinc-300 transition-all shadow-sm" onClick={() => onDeleteInvite(invite)}>
+                    <Button variant="ghost" size="icon" className="h-12 w-12 rounded-2xl hover:bg-rose-500 hover:text-white text-zinc-400 transition-all shadow-sm" onClick={() => onDeleteInvite(invite)}>
                       <Trash2 className="h-5 w-5" />
                     </Button>
                   </div>
@@ -81,7 +81,7 @@ export const SupplierInvites: React.FC<SupplierInvitesProps> = ({
                       <div className="h-20 w-20 rounded-[2rem] border-4 border-dashed border-zinc-300 flex items-center justify-center mb-6">
                         <Users className="h-10 w-10" />
                       </div>
-                      <p className="text-[10px] font-black uppercase tracking-[0.3em] italic">Zero active entry keys in distribution sector</p>
+                      <p className="text-[10px] font-black uppercase tracking-[0.3em] italic">No active invites found</p>
                    </div>
                 </TableCell>
               </TableRow>

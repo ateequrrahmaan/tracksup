@@ -1,178 +1,268 @@
 import React, { useState } from "react";
-import { collection, addDoc, serverTimestamp, setDoc, doc } from "firebase/firestore";
-import { db, auth } from "@/lib/firebase";
+import { doc, setDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { signOut } from "firebase/auth";
+import { db, auth } from "@/lib/firebase";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Package2, Plus, ArrowRight, UserPlus, LogOut, CheckCircle2, Building2, ShieldCheck, Mail } from "lucide-react";
-import { motion } from "motion/react";
+import { Package2, Building2, Store, Truck, ArrowRight, ShieldCheck, Plus, Search, Loader2, LogOut } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
+
+type OnboardingStep = "role-selection" | "org-setup" | "finalizing";
 
 export const Onboarding = () => {
   const { user } = useAuth();
-  const [orgName, setOrgName] = useState("");
+  const [step, setStep] = useState<OnboardingStep>("role-selection");
+  const [selectedRole, setSelectedRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  
+  // Org details
+  const [orgName, setOrgName] = useState("");
+  const [orgDescription, setOrgDescription] = useState("");
 
-  const handleCreateOrg = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!orgName.trim() || !user) return;
+  const roles = [
+    { 
+      id: "supplier", 
+      title: "Supplier", 
+      desc: "Manufacturer or wholesale distributor managing inventory and orders.",
+      icon: Building2,
+      accent: "bg-blue-50 text-blue-600 border-blue-100"
+    },
+    { 
+      id: "retailer", 
+      title: "Retailer", 
+      desc: "Storefront or business receiving orders and processing payments.",
+      icon: Store,
+      accent: "bg-emerald-50 text-emerald-600 border-emerald-100"
+    },
+    { 
+      id: "employee", 
+      title: "Delivery Staff", 
+      desc: "Delivery person responsible for transporting products and confirming deliveries.",
+      icon: Truck,
+      accent: "bg-amber-50 text-amber-600 border-amber-100"
+    }
+  ];
+
+  const handleRoleSelection = () => {
+    if (!selectedRole) {
+      toast.error("Please select a role");
+      return;
+    }
+    setStep("org-setup");
+  };
+
+  const handleCompleteOnboarding = async () => {
+    if (!orgName.trim() && selectedRole !== "employee") {
+      toast.error("Please enter an organization name");
+      return;
+    }
     
     setLoading(true);
     try {
-      const orgRef = await addDoc(collection(db, "organizations"), {
-        name: orgName,
-        ownerId: user.uid,
-        createdAt: serverTimestamp(),
-      });
+      // 1. Create Organization (if not employee, or maybe even for employee joining one)
+      let organizationId = "global";
+      
+      if (selectedRole !== "employee") {
+        const orgRef = await addDoc(collection(db, "organizations"), {
+          name: orgName,
+          description: orgDescription,
+          type: selectedRole,
+          ownerId: user?.uid,
+          createdAt: serverTimestamp(),
+          settings: {
+            theme: "neutral",
+            currency: "USD"
+          }
+        });
+        organizationId = orgRef.id;
+      }
 
-      await setDoc(doc(db, "memberships", `${user.uid}_${orgRef.id}`), {
-        userId: user.uid,
-        organizationId: orgRef.id,
-        role: "supplier",
+      // 2. Create Membership
+      await setDoc(doc(db, "memberships", `${user?.uid}_${organizationId}`), {
+        userId: user?.uid,
+        organizationId: organizationId,
+        role: selectedRole,
         status: "active",
+        joinedAt: serverTimestamp()
       });
 
-      toast.success("Organization established!");
+      toast.success("Setup complete!");
+      // Navigation will be handled by App.tsx observing membership change
     } catch (error) {
-      toast.error("Failed to initialize organization");
+      console.error(error);
+      toast.error("Failed to complete setup");
     } finally {
       setLoading(false);
     }
   };
 
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      toast.success("Signed out successfully");
+    } catch (error) {
+      toast.error("Failed to sign out");
+    }
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 p-4 font-sans">
-      <div className="grid w-full max-w-5xl grid-cols-1 gap-12 md:grid-cols-5">
-        
-        {/* Left Side: Brand & Context */}
-        <div className="md:col-span-2 flex flex-col justify-center space-y-8">
-          <motion.div 
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="space-y-6"
-          >
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-zinc-900 text-white shadow-xl rotate-3 mb-2">
-              <Package2 className="h-7 w-7" />
-            </div>
-            
-            <div className="space-y-4">
-              <h1 className="text-4xl font-black tracking-tight text-zinc-900 uppercase italic leading-none">Initialization<br/><span className="text-zinc-400">Required</span></h1>
-              <p className="text-zinc-500 text-lg font-medium leading-relaxed">
-                Welcome, <span className="text-zinc-900 font-bold underline decoration-zinc-200">{user?.name}</span>. 
-                Your profile is active, but you are not currently associated with an operational node.
-              </p>
-            </div>
+    <div className="min-h-screen bg-zinc-50 flex items-center justify-center p-6 font-sans">
+      <div className="w-full max-w-4xl flex flex-col items-center">
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center mb-12"
+        >
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-zinc-900 text-white shadow-xl mx-auto rotate-3 mb-4">
+            <Package2 className="h-6 w-6" />
+          </div>
+          <h1 className="text-3xl font-black uppercase italic tracking-tight">Welcome to TracksUp</h1>
+          <p className="text-zinc-500 font-medium max-w-md mx-auto mt-2">
+            Your account is ready, but you haven't chosen a role yet. 
+            Select your account type to get started.
+          </p>
+        </motion.div>
 
-            <div className="space-y-3 pt-4">
-              <div className="flex items-center gap-3 text-sm font-bold text-zinc-600 uppercase tracking-widest">
-                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                <span>Identity Verified</span>
+        <AnimatePresence mode="wait">
+          {step === "role-selection" && (
+            <motion.div
+              key="role-step"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="grid grid-cols-1 md:grid-cols-3 gap-6"
+            >
+              {roles.map((role) => (
+                <Card 
+                  key={role.id}
+                  className={`cursor-pointer transition-all border-2 rounded-[2rem] overflow-hidden ${
+                    selectedRole === role.id 
+                      ? "border-zinc-900 shadow-xl bg-white scale-[1.02]" 
+                      : "border-transparent bg-white/50 hover:bg-white hover:border-zinc-200"
+                  }`}
+                  onClick={() => setSelectedRole(role.id)}
+                >
+                  <CardHeader className="pt-10 pb-4 flex flex-col items-center text-center">
+                    <div className={`h-16 w-16 rounded-2xl flex items-center justify-center mb-6 transition-transform ${selectedRole === role.id ? "scale-110" : ""} ${role.accent}`}>
+                      <role.icon className="h-8 w-8" />
+                    </div>
+                    <CardTitle className="text-xl font-black uppercase italic tracking-tight">{role.title}</CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-center px-8 pb-10">
+                    <p className="text-zinc-500 text-sm font-medium leading-relaxed">{role.desc}</p>
+                  </CardContent>
+                </Card>
+              ))}
+              <div className="md:col-span-3 flex justify-center mt-8">
+                <Button 
+                  onClick={handleRoleSelection}
+                  className="rounded-2xl h-14 px-12 font-black uppercase italic tracking-widest text-base shadow-lg transition-all group"
+                  disabled={!selectedRole}
+                >
+                  Continue
+                  <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
+                </Button>
               </div>
-              <div className="flex items-center gap-3 text-sm font-bold text-zinc-400 uppercase tracking-widest">
-                <div className="h-4 w-4 rounded-full border-2 border-zinc-200" />
-                <span>Establish Organization</span>
-              </div>
-            </div>
+            </motion.div>
+          )}
 
-            <div className="pt-8 border-t border-zinc-200 max-w-xs">
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 mb-3">Logged in as</p>
-              <div className="flex items-center justify-between p-3 bg-white rounded-xl border border-zinc-100 shadow-sm">
-                <div className="flex items-center gap-3 overflow-hidden">
-                  <div className="h-8 w-8 rounded-full bg-zinc-100 flex items-center justify-center text-zinc-400 shrink-0">
-                    <Mail className="h-4 w-4" />
-                  </div>
-                  <span className="text-xs font-bold text-zinc-900 truncate">{user?.email}</span>
-                </div>
-                <button onClick={() => signOut(auth)} className="text-zinc-400 hover:text-rose-500 transition-colors">
-                  <LogOut className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        </div>
-
-        {/* Right Side: Options */}
-        <div className="md:col-span-3 grid gap-6">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-          >
-            <Card className="border-zinc-200 shadow-xl rounded-3xl overflow-hidden bg-white hover:border-zinc-300 transition-colors">
-              <CardHeader className="bg-zinc-900 text-white pb-8">
-                <div className="flex items-center gap-4 mb-2">
-                  <div className="p-3 bg-white/10 rounded-xl backdrop-blur-md">
-                    <Building2 className="h-6 w-6 text-emerald-400" />
-                  </div>
-                  <CardTitle className="text-2xl font-black uppercase tracking-tight italic">Provision Network</CardTitle>
-                </div>
-                <CardDescription className="text-zinc-400 font-bold uppercase text-[10px] tracking-widest">
-                  Act as a primary supplier and build your distribution ecosystem.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="pt-8">
-                <form onSubmit={handleCreateOrg} className="space-y-6">
-                  <div className="space-y-3">
-                    <Label htmlFor="orgName" className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-1">Organization Nomenclature</Label>
-                    <Input 
-                      id="orgName" 
-                      placeholder="e.g. OMNI LOGISTICS CORP" 
-                      required 
-                      className="rounded-2xl h-14 text-lg font-bold border-zinc-200 bg-zinc-50 focus:bg-white transition-all px-6"
-                      value={orgName} 
-                      onChange={(e) => setOrgName(e.target.value)}
-                    />
-                  </div>
-                  <Button className="w-full h-14 rounded-2xl text-lg font-black uppercase tracking-widest shadow-lg transition-all hover:scale-[1.01] active:scale-[0.99]" type="submit" disabled={loading}>
-                    Initialize Operation
-                    <ArrowRight className="ml-2 h-5 w-5" />
+          {step === "org-setup" && (
+            <motion.div
+              key="org-step"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="max-w-xl mx-auto"
+            >
+              <Card className="border-zinc-200 shadow-sm rounded-[2rem] p-4">
+                <CardHeader>
+                  <CardTitle className="text-2xl font-black uppercase italic tracking-tight">Organization Details</CardTitle>
+                  <CardDescription className="font-bold uppercase text-[10px] tracking-widest text-zinc-400">
+                    {selectedRole === "employee" ? "Verification Required" : "Identity Setup"}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {selectedRole === "employee" ? (
+                     <div className="bg-amber-50 border border-amber-100 p-6 rounded-2xl space-y-4">
+                        <div className="flex items-center gap-4 text-amber-900 font-black uppercase italic tracking-tight text-lg">
+                           <ShieldCheck className="h-6 w-6" />
+                           Delivery Driver
+                        </div>
+                        <p className="text-amber-700 font-medium text-sm">
+                           As a delivery driver, you will join as an independent professional. 
+                           You can be invited to various organizations by suppliers 
+                           using an invite code.
+                        </p>
+                     </div>
+                  ) : (
+                    <>
+                      <div className="space-y-2">
+                        <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Business Name</Label>
+                        <Input 
+                          placeholder="e.g. Acme Distribution" 
+                          className="h-12 rounded-xl border-zinc-200 bg-zinc-50/50 px-4 font-bold"
+                          value={orgName}
+                          onChange={(e) => setOrgName(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Description (Optional)</Label>
+                        <Input 
+                          placeholder="Wholesale distributor for hardware..." 
+                          className="h-12 rounded-xl border-zinc-200 bg-zinc-50/50 px-4 font-bold"
+                          value={orgDescription}
+                          onChange={(e) => setOrgDescription(e.target.value)}
+                        />
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+                <CardFooter className="pt-6 gap-4">
+                  <Button 
+                    variant="outline" 
+                    className="flex-1 h-14 rounded-2xl font-black uppercase italic tracking-widest border-2"
+                    onClick={() => setStep("role-selection")}
+                  >
+                    Back
                   </Button>
-                </form>
-              </CardContent>
-              <CardFooter className="bg-zinc-50/50 flex items-center gap-3 p-4 border-t border-zinc-100">
-                <ShieldCheck className="h-4 w-4 text-zinc-400" />
-                <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-400">Owner-level permissions will be granted to your profile.</span>
-              </CardFooter>
-            </Card>
-          </motion.div>
+                  <Button 
+                    className="flex-[2] h-14 rounded-2xl font-black uppercase italic tracking-widest text-base shadow-xl"
+                    onClick={handleCompleteOnboarding}
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                        Setting up...
+                      </>
+                    ) : (
+                      "Complete Setup"
+                    )}
+                  </Button>
+                </CardFooter>
+              </Card>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
+        <div className="mt-12 flex flex-col items-center gap-6">
+          <p className="text-xs font-black uppercase tracking-[0.3em] text-zinc-300 italic">
+            System Status: Ready
+          </p>
+          
+          <Button 
+            variant="ghost" 
+            className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+            onClick={handleLogout}
           >
-            <Card className="border-dashed border-2 border-zinc-200 bg-transparent rounded-3xl overflow-hidden">
-              <CardHeader>
-                <div className="flex items-center gap-3 mb-1">
-                  <UserPlus className="h-5 w-5 text-zinc-500" />
-                  <CardTitle className="text-lg font-bold text-zinc-700">Join via Authorization</CardTitle>
-                </div>
-                <CardDescription className="font-medium text-zinc-500">
-                  Expected to be a Retailer or Agent? Check your encrypted communication channels for an invite link.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="p-6 rounded-2xl bg-zinc-100/50 border border-zinc-200 border-dashed text-center space-y-2">
-                  <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Awaiting Link</p>
-                  <p className="text-sm text-zinc-600 font-medium italic">
-                    Invitation tokens are bound to specific email addresses. Ensure you are logged in correctly.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
+            <LogOut className="h-4 w-4" />
+            Sign Out
+          </Button>
         </div>
-      </div>
-
-      <div className="fixed bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-6 opacity-30 select-none pointer-events-none">
-        <span className="text-[10px] font-black uppercase tracking-[0.4em]">Node ID: {user?.uid.substring(0, 8)}</span>
-        <div className="h-1 w-1 rounded-full bg-zinc-400" />
-        <span className="text-[10px] font-black uppercase tracking-[0.4em]">Region: Global Edge</span>
-        <div className="h-1 w-1 rounded-full bg-zinc-400" />
-        <span className="text-[10px] font-black uppercase tracking-[0.4em]">Status: Nominal</span>
       </div>
     </div>
   );

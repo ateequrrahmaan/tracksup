@@ -55,8 +55,8 @@ const AppContent = () => {
         (
           <div className="flex h-screen items-center justify-center">
             <div className="text-center space-y-4">
-              <p className="text-zinc-500">Your account is pending activation in this organization.</p>
-              <button onClick={() => window.location.reload()} className="text-primary underline">Reload Page</button>
+              <p className="text-zinc-500">Your account is waiting for approval.</p>
+              <button onClick={() => window.location.reload()} className="text-primary underline">Refresh</button>
             </div>
           </div>
         )

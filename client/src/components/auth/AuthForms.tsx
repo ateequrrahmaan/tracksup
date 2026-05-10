@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Package2, LogIn, UserPlus, Eye, EyeOff, ShieldCheck, AlertCircle, Loader2 } from "lucide-react";
+import { Package2, LogIn, UserPlus, Eye, EyeOff, ShieldCheck, AlertCircle, Loader2, ArrowLeft } from "lucide-react";
+import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 
 export const AuthForms = () => {
@@ -93,7 +94,14 @@ export const AuthForms = () => {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 p-4 font-sans">
+    <div className="flex min-h-screen items-center justify-center bg-zinc-50 p-4 font-sans relative">
+      <Link 
+        to="/" 
+        className="absolute top-8 left-8 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 hover:text-zinc-900 transition-colors group"
+      >
+        <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
+        Back to Home
+      </Link>
       <div className="w-full max-w-md">
         <motion.div 
           initial={{ opacity: 0, y: -20 }}

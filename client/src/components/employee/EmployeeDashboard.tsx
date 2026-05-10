@@ -18,9 +18,11 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DeliveryConfirmationModal } from "./DeliveryConfirmationModal";
 import { DashboardLayout } from "../shared/DashboardLayout";
+import { SettingsView } from "../shared/SettingsView";
 
 import { Order } from "@/types";
 import { format } from "date-fns";
+import { formatCurrency } from "@/constants";
 
 interface OrderCardProps {
   order: Order;
@@ -55,7 +57,7 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onConfirm, onStart, onView
       <div className="space-y-1">
         <div className="flex justify-between items-center text-xs text-zinc-500 font-medium">
           <span>Items: {order.items?.length || 0}</span>
-          <span className="text-primary font-black text-lg">${order.totalAmount.toFixed(2)}</span>
+          <span className="text-primary font-black text-lg">{formatCurrency(order.totalAmount, order.currency)}</span>
         </div>
       </div>
     </CardContent>
@@ -111,10 +113,10 @@ const ManifestModal: React.FC<ManifestModalProps> = ({ order, onClose, onExecute
               </div>
             </div>
             <DialogTitle className="text-3xl font-black italic uppercase tracking-tight leading-none mb-1">
-              Manifest #{order.id.slice(-8).toUpperCase()}
+              Order #{order.id.slice(-8).toUpperCase()}
             </DialogTitle>
             <DialogDescription className="text-zinc-500 font-bold uppercase text-[10px] tracking-[0.2em]">
-              Consignee: {order.retailerName}
+              Store: {order.retailerName}
             </DialogDescription>
           </DialogHeader>
         </div>
@@ -122,16 +124,16 @@ const ManifestModal: React.FC<ManifestModalProps> = ({ order, onClose, onExecute
         <div className="p-8 space-y-8 font-sans">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div>
-               <p className="text-[10px] font-black uppercase text-zinc-400 tracking-[0.2em] mb-4 border-b border-zinc-100 pb-2">Operational Log</p>
+               <p className="text-[10px] font-black uppercase text-zinc-400 tracking-[0.2em] mb-4 border-b border-zinc-100 pb-2">Order Timeline</p>
                <div className="space-y-4">
-                  <TimelineItem icon={<Clock />} label="Request Placed" date={order.createdAt} active />
-                  <TimelineItem icon={<Truck />} label="Transit Start" date={order.status !== 'pending' && order.status !== 'assigned' ? order.updatedAt : null} active={order.status !== 'pending' && order.status !== 'assigned'} />
-                  <TimelineItem icon={<CheckCircle />} label="Final Handover" date={order.delivered_at} active={order.status === 'delivered'} />
+                  <TimelineItem icon={<Clock />} label="Order Placed" date={order.createdAt} active />
+                  <TimelineItem icon={<Truck />} label="In Transit" date={order.status !== 'pending' && order.status !== 'assigned' ? order.updatedAt : null} active={order.status !== 'pending' && order.status !== 'assigned'} />
+                  <TimelineItem icon={<CheckCircle />} label="Delivery Complete" date={order.delivered_at} active={order.status === 'delivered'} />
                </div>
             </div>
 
             <div className="space-y-6">
-              <p className="text-[10px] font-black uppercase text-zinc-400 tracking-[0.2em] mb-4 border-b border-zinc-100 pb-2">Payload Details</p>
+              <p className="text-[10px] font-black uppercase text-zinc-400 tracking-[0.2em] mb-4 border-b border-zinc-100 pb-2">Package Contents</p>
               <div className="space-y-3 bg-zinc-50 p-4 rounded-2xl border border-zinc-100 shadow-inner">
                 {order.items.map((item, idx) => (
                   <div key={`manifest-item-${idx}`} className="flex justify-between items-center">
@@ -139,30 +141,30 @@ const ManifestModal: React.FC<ManifestModalProps> = ({ order, onClose, onExecute
                        <span className="text-zinc-900 font-black uppercase italic text-xs tracking-tight">{item.name}</span>
                        <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-tighter">Qty: {item.quantity}</span>
                      </div>
-                     <span className="font-black text-zinc-900 italic text-sm tracking-tight">${(item.price * item.quantity).toFixed(2)}</span>
+                     <span className="font-black text-zinc-900 italic text-sm tracking-tight">{formatCurrency(item.price * item.quantity, order.currency)}</span>
                   </div>
                 ))}
                 <Separator className="bg-zinc-200 opacity-50" />
                 <div className="pt-2 flex justify-between font-black text-zinc-900 italic text-lg tracking-tighter">
-                   <span className="text-[10px] font-black uppercase text-zinc-400 tracking-widest mt-1">Aggregate Val</span>
-                   <span>${order.totalAmount.toFixed(2)}</span>
+                   <span className="text-[10px] font-black uppercase text-zinc-400 tracking-widest mt-1">Total Amount</span>
+                   <span>{formatCurrency(order.totalAmount, order.currency)}</span>
                 </div>
               </div>
 
               {order.amount_collected !== undefined && (
                  <div className="bg-emerald-900 p-4 rounded-2xl flex justify-between items-center text-white shadow-lg">
-                    <span className="text-[9px] font-black uppercase tracking-widest text-emerald-400">Total Capital Resolved</span>
-                    <span className="font-black text-2xl italic tracking-tighter">${order.amount_collected.toFixed(2)}</span>
+                    <span className="text-[9px] font-black uppercase tracking-widest text-emerald-400">Payment Collected</span>
+                    <span className="font-black text-2xl italic tracking-tighter">{formatCurrency(order.amount_collected, order.currency)}</span>
                  </div>
               )}
             </div>
           </div>
         </div>
         <div className="p-8 pt-0 flex justify-end gap-3">
-          <Button variant="ghost" onClick={onClose} className="h-12 rounded-2xl px-6 font-black uppercase text-[10px] tracking-widest">Close Manifest</Button>
+          <Button variant="ghost" onClick={onClose} className="h-12 rounded-2xl px-6 font-black uppercase text-[10px] tracking-widest">Close Details</Button>
           {order.status !== 'delivered' && (
              <Button className="h-12 rounded-full px-8 font-black uppercase tracking-widest shadow-lg shadow-zinc-200" onClick={() => onExecuteHandover(order)}>
-               Execute Handover
+               Confirm Delivery
              </Button>
           )}
         </div>
@@ -294,41 +296,41 @@ export const EmployeeDashboard = () => {
     <DashboardLayout
       activeTab={activeTab}
       onTabChange={setActiveTab}
-      title={activeTab === 'overview' ? "Operations Room" : "Transit Log"}
+      title={activeTab === 'overview' ? "Daily Tasks" : "Delivery Log"}
       subtitle={activeOrg?.name}
     >
       <div className="space-y-8">
-        {/* Performance Cards - always visible or maybe only in overview? User wants separate features per role. */}
+        {/* Performance Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
           <Card className="bg-white border-zinc-200 shadow-sm p-6 rounded-3xl group hover:scale-[1.02] transition-all">
-            <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-3">Units Delivered</p>
+            <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-3">Orders Delivered</p>
             <div className="flex items-end justify-between">
               <div className="text-4xl font-black text-zinc-900 italic tracking-tighter">{stats.deliveredToday}</div>
               <div className="h-10 w-10 flex items-center justify-center rounded-xl bg-zinc-50 text-zinc-400">
                 <CheckCircle className="h-5 w-5" />
               </div>
             </div>
-            <p className="text-[10px] font-bold text-zinc-400 mt-4 uppercase tracking-tight italic">Temporal window: Today</p>
+            <p className="text-[10px] font-bold text-zinc-400 mt-4 uppercase tracking-tight italic">Period: Today</p>
           </Card>
           <Card className="bg-white border-zinc-200 shadow-sm p-6 rounded-3xl group hover:scale-[1.02] transition-all">
-            <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-3">Capital Collected</p>
+            <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-3">Payment Collected</p>
             <div className="flex items-end justify-between">
-              <div className="text-4xl font-black text-emerald-600 italic tracking-tighter">${stats.collectedToday.toFixed(0)}</div>
+              <div className="text-4xl font-black text-emerald-600 italic tracking-tighter">{formatCurrency(stats.collectedToday)}</div>
               <div className="h-10 w-10 flex items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
                 <Calculator className="h-5 w-5" />
               </div>
             </div>
-            <p className="text-[10px] font-bold text-zinc-400 mt-4 uppercase tracking-tight italic">Success rate: Nominal</p>
+            <p className="text-[10px] font-bold text-zinc-400 mt-4 uppercase tracking-tight italic">Performance: Good</p>
           </Card>
           <Card className="bg-white border-zinc-200 shadow-sm p-6 rounded-3xl group hover:scale-[1.02] transition-all">
-            <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-3">Risk Assessment</p>
+            <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-3">Uncollected Payments</p>
             <div className="flex items-end justify-between">
-              <div className="text-4xl font-black text-rose-500 italic tracking-tighter">${stats.pendingCollection.toFixed(0)}</div>
+              <div className="text-4xl font-black text-rose-500 italic tracking-tighter">{formatCurrency(stats.pendingCollection)}</div>
               <div className="h-10 w-10 flex items-center justify-center rounded-xl bg-rose-50 text-rose-500">
                 <AlertCircle className="h-5 w-5" />
               </div>
             </div>
-            <p className="text-[10px] font-bold text-zinc-400 mt-4 uppercase tracking-tight italic">Outstanding collection</p>
+            <p className="text-[10px] font-bold text-zinc-400 mt-4 uppercase tracking-tight italic">Payments to collect</p>
           </Card>
         </div>
 
@@ -347,10 +349,10 @@ export const EmployeeDashboard = () => {
              </div>
              {todaysDeliveries.length === 0 && (
                <div className="space-y-6">
-                 <EmptyState message="System buffer empty for today" />
+                 <EmptyState message="No deliveries for today" />
                  {activeDeliveries.length > 0 && (
                    <p className="text-center text-[10px] font-black uppercase tracking-widest text-zinc-400">
-                     Found {activeDeliveries.length} active nodes in general queue.
+                     Found {activeDeliveries.length} active orders in queue.
                    </p>
                  )}
                </div>
@@ -358,7 +360,7 @@ export const EmployeeDashboard = () => {
           </div>
         )}
 
-        {activeTab === "collections" && (
+        {(activeTab === "collections" || activeTab === "outstanding") && (
           <div className="space-y-6">
              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {pendingCollections.map((order) => (
@@ -369,7 +371,7 @@ export const EmployeeDashboard = () => {
                         <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">Node ID: #{order.id.slice(-8).toUpperCase()}</p>
                       </div>
                       <div className="text-right">
-                        <p className="font-black text-rose-500 text-2xl italic tracking-tighter leading-none">${order.totalAmount.toFixed(2)}</p>
+                        <p className="font-black text-rose-500 text-2xl italic tracking-tighter leading-none">{formatCurrency(order.totalAmount, order.currency)}</p>
                         <div className="mt-2">{getPaymentBadge(order.payment_status)}</div>
                       </div>
                     </div>
@@ -390,16 +392,16 @@ export const EmployeeDashboard = () => {
           </div>
         )}
 
-        {activeTab === "deliveries" && (
+        {(activeTab === "deliveries" || activeTab === "orders") && (
           <div className="space-y-6">
             <div className="bg-white p-2 rounded-2xl border border-zinc-100 shadow-sm w-fit">
                <Select value={statusFilter} onValueChange={setStatusFilter}>
                  <SelectTrigger className="w-64 h-10 rounded-xl border-none bg-zinc-50 font-bold text-[10px] uppercase tracking-widest">
                    <Filter className="h-3.5 w-3.5 mr-2 text-zinc-400" />
-                   <SelectValue placeholder="System Filter" />
+                   <SelectValue placeholder="Filter Status" />
                  </SelectTrigger>
                  <SelectContent className="rounded-xl">
-                   <SelectItem value="all">Global Queue</SelectItem>
+                   <SelectItem value="all">All Active Deliveries</SelectItem>
                    <SelectItem value="assigned">Awaiting Transit</SelectItem>
                    <SelectItem value="out_for_delivery">In Transit</SelectItem>
                  </SelectContent>
@@ -417,7 +419,7 @@ export const EmployeeDashboard = () => {
               ))}
             </div>
             {activeDeliveries.length === 0 && (
-              <EmptyState message="Registry empty" icon={<Truck className="h-10 w-10 opacity-20" />} />
+              <EmptyState message="No deliveries found" icon={<Truck className="h-10 w-10 opacity-20" />} />
             )}
           </div>
         )}
@@ -428,12 +430,12 @@ export const EmployeeDashboard = () => {
                <Select value={paymentFilter} onValueChange={setPaymentFilter}>
                  <SelectTrigger className="w-64 h-10 rounded-xl border-none bg-zinc-50 font-bold text-[10px] uppercase tracking-widest">
                    <Filter className="h-3.5 w-3.5 mr-2 text-zinc-400" />
-                   <SelectValue placeholder="Financial Filter" />
+                   <SelectValue placeholder="Filter Payment" />
                  </SelectTrigger>
                  <SelectContent className="rounded-xl">
-                   <SelectItem value="all">Global Ledger</SelectItem>
-                   <SelectItem value="paid">Finalized</SelectItem>
-                   <SelectItem value="unpaid">Awaiting</SelectItem>
+                   <SelectItem value="all">Global History</SelectItem>
+                   <SelectItem value="paid">Paid</SelectItem>
+                   <SelectItem value="unpaid">Unpaid</SelectItem>
                    <SelectItem value="credit">Credit Balance</SelectItem>
                  </SelectContent>
                </Select>
@@ -452,7 +454,7 @@ export const EmployeeDashboard = () => {
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-xl font-black text-zinc-900 italic tracking-tighter">${order.totalAmount.toFixed(2)}</p>
+                      <p className="text-xl font-black text-zinc-900 italic tracking-tighter">{formatCurrency(order.totalAmount, order.currency)}</p>
                       {getPaymentBadge(order.payment_status)}
                     </div>
                   </div>
@@ -460,10 +462,12 @@ export const EmployeeDashboard = () => {
               ))}
             </div>
             {filteredOrders.filter(o => o.status === 'delivered').length === 0 && (
-              <EmptyState message="Archive registry empty" />
+              <EmptyState message="No history found" />
             )}
           </div>
         )}
+
+        {activeTab === "settings" && <SettingsView />}
 
         <DeliveryConfirmationModal
           order={selectedOrder}

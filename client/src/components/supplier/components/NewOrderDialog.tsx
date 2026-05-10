@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { SystemUser, OrderItem } from "@/types";
+import { CURRENCIES, getCurrencySymbol } from "@/constants";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +20,7 @@ interface NewOrderDialogProps {
     items: OrderItem[];
     deliveryDate: string;
     totalAmount: number;
+    currency: string;
   }) => Promise<void>;
 }
 
@@ -34,10 +36,12 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
   ]);
   const [selectedRetailerId, setSelectedRetailerId] = useState("");
   const [assignedEmployeeId, setAssignedEmployeeId] = useState("");
+  const [currency, setCurrency] = useState("USD");
   const [deliveryDate, setDeliveryDate] = useState(new Date().toISOString().split('T')[0]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const grandTotal = orderItems.reduce((sum, item) => sum + (item.quantity * item.price), 0);
+  const currentSymbol = getCurrencySymbol(currency);
 
   const addOrderItem = () => {
     setOrderItems([...orderItems, { name: "", quantity: 1, price: 0 }]);
@@ -66,7 +70,8 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
         employeeId: assignedEmployeeId === "unassigned" ? "" : assignedEmployeeId,
         items: orderItems,
         deliveryDate,
-        totalAmount: grandTotal
+        totalAmount: grandTotal,
+        currency
       });
       // Reset
       setOrderItems([{ name: "", quantity: 1, price: 0 }]);
@@ -124,6 +129,24 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
                         className="rounded-2xl h-12 border-zinc-100 bg-zinc-50 font-bold uppercase text-xs italic"
                     />
                 </div>
+
+                <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 italic">Currency Vector</Label>
+                    <Select 
+                        value={currency} 
+                        onValueChange={setCurrency}
+                        required
+                    >
+                        <SelectTrigger className="rounded-2xl h-12 border-zinc-100 bg-zinc-50 font-bold uppercase text-xs italic">
+                            <SelectValue placeholder="Select currency..." />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-2xl border-none shadow-2xl">
+                            {CURRENCIES.map(c => (
+                                <SelectItem key={c.code} value={c.code} className="font-bold uppercase text-[10px] tracking-widest">{c.code} ({c.symbol})</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
             </div>
 
             <div className="space-y-4">
@@ -179,7 +202,7 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
                           />
                         </TableCell>
                         <TableCell className="px-2 font-black italic tracking-tighter text-zinc-900">
-                          ${(item.quantity * item.price).toFixed(2)}
+                          {currentSymbol}{(item.quantity * item.price).toFixed(2)}
                         </TableCell>
                         <TableCell className="px-4">
                           <Button 
@@ -219,8 +242,8 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
                     </Select>
                 </div>
                 <div className="text-right">
-                    <p className="text-[10px] font-black uppercase text-zinc-400 tracking-widest mb-1 italic">Venture Capital Total</p>
-                    <p className="text-5xl font-black italic tracking-tighter text-zinc-900">${grandTotal.toFixed(2)}</p>
+                    <p className="text-[10px] font-black uppercase text-zinc-400 tracking-widest mb-1 italic">Venture Capital Total ({currency})</p>
+                    <p className="text-5xl font-black italic tracking-tighter text-zinc-900">{currentSymbol}{grandTotal.toFixed(2)}</p>
                 </div>
             </div>
           </div>
