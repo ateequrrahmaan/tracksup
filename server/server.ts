@@ -5,6 +5,7 @@ import fs from "fs";
 import cors from "cors";
 import morgan from "morgan";
 import helmet from "helmet";
+import { rateLimit } from "express-rate-limit";
 import { config } from "dotenv";
 import { fileURLToPath } from "url";
 
@@ -26,17 +27,29 @@ async function startServer() {
   const app = express();
   const PORT = Number(process.env.PORT) || 3000;
 
+  const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    limit: 100, // Limit each IP to 100 requests per windowMs
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: { error: "Too many requests from this IP, please try again after 15 minutes" }
+  });
+
   // Middleware
   app.use(helmet({
-    contentSecurityPolicy: false, // Disable for Vite dev
+    contentSecurityPolicy: process.env.NODE_ENV === "production",
   }));
   app.use(cors({
     origin: process.env.CORS_ORIGIN || "*",
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
     allowedHeaders: ["Content-Type", "Authorization", "x-organization-id"]
   }));
-  app.use(morgan("dev"));
+  app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
   app.use(express.json());
+  
+  if (process.env.NODE_ENV === "production") {
+    app.use("/api", limiter);
+  }
 
   // API Routes
   app.use("/api/auth", authRoutes);
