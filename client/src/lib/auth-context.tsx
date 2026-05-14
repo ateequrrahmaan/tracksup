@@ -64,9 +64,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else {
         setActiveOrgId(null);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching user context:", error);
-      // Don't toast on initial load if not logged in
+      
+      // If we are logged in to Firebase but the backend fails, it's usually a configuration issue
+      if (firebaseUser) {
+        if (error.response?.status === 500) {
+          toast.error("Application backend error. Please check if server-side Firebase Admin environment variables are set correctly in your .env file.", {
+            duration: 10000,
+          });
+        } else {
+          toast.error("Failed to load your profile data. Please try refreshing the page.");
+        }
+      }
     } finally {
       setLoading(false);
     }

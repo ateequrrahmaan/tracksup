@@ -49,11 +49,29 @@ export const AuthForms = () => {
     }
     setLoading(true);
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      toast.success("Welcome back!");
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+      
+      // Try to fetch user name from Firestore for a personal touch
+      try {
+        const { getDoc, doc } = await import("firebase/firestore");
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          toast.success(`Welcome back, ${userData.name || "Operative"}!`);
+        } else {
+          toast.success("Welcome back!");
+        }
+      } catch (firestoreError) {
+        console.error("Error fetching user name for toast:", firestoreError);
+        toast.success("Welcome back!");
+      }
     } catch (error: any) {
-      if (error.code === "auth/invalid-credential") {
+      console.error("Login Error:", error);
+      if (error.code === "auth/invalid-credential" || error.code === "auth/user-not-found" || error.code === "auth/wrong-password") {
         toast.error("Invalid email or password. Please try again.");
+      } else if (error.code === "auth/too-many-requests") {
+        toast.error("Too many login attempts. Please try again later.");
       } else {
         toast.error(error.message || "Failed to login");
       }
@@ -64,7 +82,7 @@ export const AuthForms = () => {
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (name.length < 2) {
+    if (name.trim().length < 2) {
       toast.error("Please enter your full name");
       return;
     }
@@ -79,15 +97,27 @@ export const AuthForms = () => {
     setLoading(true);
     try {
       const { user } = await createUserWithEmailAndPassword(auth, email, password);
+      
+      // Update profile with name so it's available in auth
+      const { updateProfile } = await import("firebase/auth");
+      await updateProfile(user, { displayName: name });
+
+      // Create user document in Firestore
       await setDoc(doc(db, "users", user.uid), {
         uid: user.uid,
-        name,
-        email,
+        name: name.trim(),
+        email: email.toLowerCase(),
         createdAt: new Date().toISOString(),
       });
-      toast.success("Account created successfully!");
+      
+      toast.success(`Account created successfully! Welcome, ${name}!`);
     } catch (error: any) {
-      toast.error(error.message || "Failed to signup");
+      console.error("Signup Error:", error);
+      if (error.code === "auth/email-already-in-use") {
+        toast.error("This email is already registered. Please login instead.");
+      } else {
+        toast.error(error.message || "Failed to signup. Please try again.");
+      }
     } finally {
       setLoading(false);
     }
