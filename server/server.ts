@@ -59,7 +59,7 @@ async function startServer() {
   app.use("/api/products", productRoutes);
 
   // Health Check
-  app.get("/api/health", (req, res) => {
+  app.get("/api/health", (req: express.Request, res: express.Response) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
@@ -96,7 +96,7 @@ async function startServer() {
     const distPath = __dirname;
     if (fs.existsSync(path.join(distPath, "index.html"))) {
       app.use(express.static(distPath));
-      app.get("*", (req, res) => {
+      app.get("*", (req: express.Request, res: express.Response) => {
         res.sendFile(path.join(distPath, "index.html"));
       });
     } else {
