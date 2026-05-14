@@ -1,15 +1,19 @@
 {
-  "name": "react-example",
+  "name": "tracksup",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
+  "workspaces": [
+    "client",
+    "server"
+  ],
   "scripts": {
     "dev": "tsx server/server.ts",
     "dev:server": "tsx --watch server/server.ts",
-    "dev:client": "npm run dev --prefix client",
+    "dev:client": "npm run dev --workspace client",
     "dev:all": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
-    "build": "vite build && npm run build --prefix server",
-    "start": "NODE_ENV=production node dist/server.js",
+    "build": "vite build && npm run build --workspace server",
+    "start": "NODE_ENV=production node server/dist/server.js",
     "lint": "tsc --noEmit"
   },
   "dependencies": {

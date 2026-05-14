@@ -92,15 +92,16 @@ async function startServer() {
       console.warn(">>> Vite middleware failed to attach (expected if running standalone server)");
     }
   } else {
-    // Production: serve static files from the same directory as the server script
-    const distPath = __dirname;
+    // Production: serve static files from the client's dist directory
+    const distPath = path.join(__dirname, "../../dist/client");
     if (fs.existsSync(path.join(distPath, "index.html"))) {
       app.use(express.static(distPath));
       app.get("*", (req: express.Request, res: express.Response) => {
         res.sendFile(path.join(distPath, "index.html"));
       });
+      console.log(`>>> Production: Serving client from ${distPath}`);
     } else {
-      console.log(">>> Production: Static files directory not found (hosted on standalone backend)");
+      console.log(">>> Production: Client dist not found at", distPath);
     }
   }
 

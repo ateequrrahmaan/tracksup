@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
 import { auth } from "./firebase";
-import api from "@/services/api";
-import { SystemUser, Membership, Organization, UserRole } from "@/types";
+import api from "../services/api";
+import { SystemUser, Membership, Organization, UserRole } from "../types";
 import { toast } from "sonner";
 
 interface AuthContextType {
