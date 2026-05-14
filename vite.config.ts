@@ -10,6 +10,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
   
   return {
+    root: 'client',
     plugins: [react(), tailwindcss()],
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
@@ -20,13 +21,8 @@ export default defineConfig(({ mode }) => {
       },
     },
     build: {
-      outDir: 'dist/client',
+      outDir: '../dist/client',
       emptyOutDir: true,
-      rollupOptions: {
-        input: {
-          main: path.resolve(__dirname, 'client/index.html'),
-        },
-      },
     },
     server: {
       hmr: process.env.DISABLE_HMR !== 'true',
