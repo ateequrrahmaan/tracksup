@@ -1,7 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
-import fallbackFirebaseConfig from "../../../firebase-applet-config.json";
 
 // Try loading from JSON fallback for dev, but prefer env variables for production
 let firebaseConfig: any = {};
@@ -20,7 +19,8 @@ try {
 
   // If environment variables are missing, try to import from the local config file
   if (!firebaseConfig.apiKey) {
-    firebaseConfig = fallbackFirebaseConfig;
+    const config = await import("../../../firebase-applet-config.json");
+    firebaseConfig = config.default;
   }
 } catch (error) {
   console.warn("Could not load Firebase config from env or file. Ensure configuration is set.");
