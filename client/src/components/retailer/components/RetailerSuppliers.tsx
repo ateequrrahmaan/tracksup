@@ -4,22 +4,25 @@ import { Membership, Organization } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Store, ArrowRight, Plus, Mail, ShieldCheck, Globe, Link as LinkIcon } from "lucide-react";
+import { Store, ArrowRight, Plus, Mail, ShieldCheck, Globe, Link as LinkIcon, LogOut, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { db } from "@/lib/firebase";
-import { collection, setDoc, doc, serverTimestamp, Timestamp } from "firebase/firestore";
+import { db, handleFirestoreError, OperationType } from "@/lib/firebase";
+import { collection, setDoc, doc, serverTimestamp, Timestamp, deleteDoc } from "firebase/firestore";
 
 interface RetailerSuppliersProps {
   onViewMarketplace?: (supplierId: string) => void;
 }
 
 export const RetailerSuppliers: React.FC<RetailerSuppliersProps> = ({ onViewMarketplace }) => {
-  const { memberships, activeOrg, switchOrg, firebaseUser } = useAuth();
+  const { memberships, activeOrg, organizations, switchOrg, firebaseUser, refreshContext } = useAuth();
   const [isInviteOpen, setIsInviteOpen] = useState(false);
+  const [isExitOpen, setIsExitOpen] = useState(false);
+  const [selectedMembership, setSelectedMembership] = useState<Membership | null>(null);
   const [inviteEmail, setInviteEmail] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isExiting, setIsExiting] = useState(false);
 
   // Filter memberships where the user is a retailer
   const retailerMemberships = memberships.filter(m => m.role === 'retailer');
@@ -68,6 +71,27 @@ export const RetailerSuppliers: React.FC<RetailerSuppliersProps> = ({ onViewMark
     }
   };
 
+  const handleExitOrg = async () => {
+    if (!selectedMembership || !firebaseUser) return;
+    
+    setIsExiting(true);
+    try {
+      await deleteDoc(doc(db, "memberships", selectedMembership.id));
+      
+      toast.success("Successfully left the organization.");
+      
+      // If we left the active org, we need to switch or refresh
+      await refreshContext();
+      setIsExitOpen(false);
+      setSelectedMembership(null);
+    } catch (error) {
+      console.error("Exit error:", error);
+      handleFirestoreError(error, OperationType.DELETE, `memberships/${selectedMembership.id}`);
+    } finally {
+      setIsExiting(false);
+    }
+  };
+
   return (
     <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
@@ -89,6 +113,8 @@ export const RetailerSuppliers: React.FC<RetailerSuppliersProps> = ({ onViewMark
         {retailerMemberships.length > 0 ? (
           retailerMemberships.map((mem) => {
             const isActive = activeOrg?.id === mem.organizationId;
+            const orgTitle = organizations[mem.organizationId]?.name || `Supplier ${mem.organizationId.slice(0,4).toUpperCase()}`;
+            
             return (
               <Card 
                 key={mem.id} 
@@ -107,7 +133,7 @@ export const RetailerSuppliers: React.FC<RetailerSuppliersProps> = ({ onViewMark
                   </div>
                   <div className="mt-6">
                     <CardTitle className="text-xl font-black uppercase italic tracking-tighter truncate">
-                      {mem.organizationId === activeOrg?.id ? activeOrg.name : `Supplier ${mem.organizationId.slice(0,4).toUpperCase()}`}
+                      {orgTitle}
                     </CardTitle>
                     <CardDescription className={`text-[10px] font-bold uppercase tracking-widest italic mt-1 ${isActive ? "text-white/60" : "text-zinc-500"}`}>
                       Your Role: {mem.role}
@@ -127,6 +153,17 @@ export const RetailerSuppliers: React.FC<RetailerSuppliersProps> = ({ onViewMark
                   </div>
                   
                   <div className="mt-8 flex flex-col gap-3">
+                    <Button 
+                      onClick={() => {
+                        setSelectedMembership(mem);
+                        setIsExitOpen(true);
+                      }}
+                      variant="ghost"
+                      className={`w-full h-14 rounded-2xl font-black uppercase italic tracking-widest transition-all ${isActive ? 'bg-white/5 text-white/40 hover:text-white hover:bg-white/10' : 'text-zinc-400 hover:text-red-600 hover:bg-red-50'}`}
+                    >
+                       <LogOut className="mr-2 h-4 w-4" /> Disconnect
+                    </Button>
+
                     {onViewMarketplace && (
                       <Button 
                         onClick={() => onViewMarketplace(mem.organizationId)}
@@ -167,15 +204,15 @@ export const RetailerSuppliers: React.FC<RetailerSuppliersProps> = ({ onViewMark
       </div>
 
       <Dialog open={isInviteOpen} onOpenChange={setIsInviteOpen}>
-        <DialogContent className="rounded-[2.5rem] p-10 border-none shadow-2xl sm:max-w-[500px]">
+        <DialogContent className="w-[95vw] sm:max-w-[500px] rounded-[2rem] md:rounded-[2.5rem] p-6 md:p-10 border-none shadow-2xl">
           <form onSubmit={handleConnectRequest}>
               <DialogHeader>
-                <DialogTitle className="text-2xl font-black uppercase italic tracking-tighter">Connect to Supplier</DialogTitle>
+                <DialogTitle className="text-xl md:text-2xl font-black uppercase italic tracking-tighter">Connect to Supplier</DialogTitle>
                 <DialogDescription className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">
                   Send an invitation to a new supply partner
                 </DialogDescription>
               </DialogHeader>
-            <div className="space-y-6 py-10">
+            <div className="space-y-6 py-6 md:py-10">
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-1">Supplier Email Address</label>
                 <div className="relative">
@@ -186,34 +223,64 @@ export const RetailerSuppliers: React.FC<RetailerSuppliersProps> = ({ onViewMark
                     placeholder="logistics@supplier.com"
                     value={inviteEmail}
                     onChange={(e) => setInviteEmail(e.target.value)}
-                    className="h-16 pl-14 rounded-2xl bg-zinc-50 border-none font-bold text-zinc-900 placeholder:text-zinc-400"
+                    className="h-14 md:h-16 pl-14 rounded-2xl bg-zinc-50 border-none font-bold text-zinc-900 placeholder:text-zinc-400"
                   />
                 </div>
               </div>
-              <div className="p-6 rounded-[2rem] bg-amber-50 border border-amber-100">
+              <div className="p-4 md:p-6 rounded-[2rem] bg-amber-50 border border-amber-100">
                 <p className="text-[9px] font-black uppercase text-amber-600 tracking-widest leading-relaxed">
                   Note: This will create an invite link. Send this link to your supplier to connect.
                 </p>
               </div>
             </div>
-            <DialogFooter className="sm:justify-between gap-4">
+            <DialogFooter className="flex-col sm:flex-row sm:justify-between gap-3">
               <Button 
                 type="button" 
                 variant="ghost" 
                 onClick={() => setIsInviteOpen(false)}
-                className="rounded-2xl h-14 font-black uppercase tracking-widest text-[10px]"
+                className="rounded-2xl h-12 md:h-14 font-black uppercase tracking-widest text-[10px] w-full sm:w-auto"
               >
                 Cancel
               </Button>
               <Button 
                 type="submit" 
                 disabled={isSubmitting}
-                className="rounded-2xl h-14 px-8 flex-1 font-black uppercase italic tracking-widest bg-zinc-900 text-white shadow-xl"
+                className="rounded-2xl h-12 md:h-14 px-8 flex-1 font-black uppercase italic tracking-widest bg-zinc-900 text-white shadow-xl w-full sm:w-auto"
               >
                 {isSubmitting ? "Creating..." : "Create Invite Link"}
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isExitOpen} onOpenChange={setIsExitOpen}>
+        <DialogContent className="w-[95vw] sm:max-w-[400px] rounded-[2rem] md:rounded-[2.5rem] p-6 md:p-10 border-none shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl md:text-2xl font-black uppercase italic tracking-tighter text-red-600">Disconnect Supplier?</DialogTitle>
+            <DialogDescription className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 pt-2">
+              Are you sure you want to leave <span className="text-zinc-900">{selectedMembership ? (organizations[selectedMembership.organizationId]?.name || "this supplier") : ""}</span>? 
+              This action will remove your access to their product catalog and order system.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <DialogFooter className="flex-col sm:flex-row gap-3 mt-6">
+            <Button 
+              type="button" 
+              variant="ghost" 
+              onClick={() => setIsExitOpen(false)}
+              className="rounded-2xl h-12 md:h-14 font-black uppercase tracking-widest text-[10px] w-full sm:w-auto"
+            >
+              Go Back
+            </Button>
+            <Button 
+              onClick={handleExitOrg}
+              disabled={isExiting}
+              className="rounded-2xl h-12 md:h-14 px-8 flex-1 font-black uppercase italic tracking-widest bg-red-600 text-white shadow-xl shadow-red-200 hover:bg-red-700 w-full sm:w-auto"
+            >
+              {isExiting ? <Loader2 className="h-5 w-5 animate-spin" /> : "Confirm Exit"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

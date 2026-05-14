@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { db } from "@/lib/firebase";
+import React, { useState, useEffect, useMemo } from "react";
+import { db, handleFirestoreError, OperationType } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, orderBy } from "firebase/firestore";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ import { Order, SystemUser } from "@/types";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { formatCurrency, getCurrencySymbol } from "@/constants";
 import { DashboardLayout } from "../shared/DashboardLayout";
+import api from "@/services/api";
 
 const getPaymentBadge = (status?: string) => {
   switch (status) {
@@ -33,27 +34,30 @@ interface OrderDetailModalProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   onGenerateInvoice: (order: Order) => void;
+  fetchedOrgs: Record<string, string>;
+  organizations: Record<string, any>;
 }
 
 import { RetailerSuppliers } from "./components/RetailerSuppliers";
 import { RetailerMarketplace } from "./components/RetailerMarketplace";
 import { SettingsView } from "../shared/SettingsView";
 
-const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ order, isOpen, onOpenChange, onGenerateInvoice }) => {
+const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ order, isOpen, onOpenChange, onGenerateInvoice, fetchedOrgs, organizations }) => {
   if (!order) return null;
+  const supplierName = (order as any).supplierName || fetchedOrgs[order.supplierId || ""] || organizations[order.supplierId || ""]?.name || "Supplier";
   
   const steps = ["pending", "assigned", "out_for_delivery", "delivered"];
   const currentStep = steps.indexOf(order.status);
   
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[550px] max-h-[85vh] overflow-y-auto">
+      <DialogContent className="w-[95vw] sm:max-w-[550px] max-h-[90vh] overflow-y-auto p-4 sm:p-6">
         <DialogHeader>
           <div className="flex justify-between items-start pr-8">
             <div>
-              <DialogTitle className="text-xl">Order #{order.id.slice(-6).toUpperCase()}</DialogTitle>
-              <DialogDescription>
-                Placed on {order.createdAt?.toDate ? format(order.createdAt.toDate(), 'PPPp') : 'Processing...'}
+              <DialogTitle className="text-xl font-black italic uppercase tracking-tight">{supplierName}</DialogTitle>
+              <DialogDescription className="text-xs font-bold uppercase tracking-widest text-zinc-500">
+                Manifest #{order.id.slice(-8).toUpperCase()} • {order.createdAt?.toDate ? format(order.createdAt.toDate(), 'PPPp') : 'Processing...'}
               </DialogDescription>
             </div>
             <Badge variant={order.status === "delivered" ? "success" : "default"} as any>
@@ -61,6 +65,17 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ order, isOpen, onOp
             </Badge>
           </div>
         </DialogHeader>
+        
+        <div className="py-6 space-y-8">
+           <div className="flex items-center gap-3 p-4 rounded-2xl bg-zinc-50 border border-zinc-100 italic">
+              <div className="h-10 w-10 bg-white rounded-xl flex items-center justify-center border border-zinc-100">
+                 <Store className="h-5 w-5 text-zinc-400" />
+              </div>
+              <div>
+                 <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Distribution Source</p>
+                 <p className="text-sm font-black uppercase text-zinc-900">{supplierName}</p>
+              </div>
+           </div>
 
         <div className="space-y-6 py-4">
           <div className="relative flex justify-between px-2 pt-4">
@@ -113,12 +128,13 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ order, isOpen, onOp
             <div className="space-y-1">
               <p className="text-[10px] font-bold text-zinc-600 uppercase">Delivery Info</p>
               <p className="text-sm font-semibold">Date: {order.delivered_at ? format(new Date(order.delivered_at), 'PPP') : 'Not yet'}</p>
-              <p className="text-sm text-zinc-700">Agent ID: {order.employeeId?.slice(-6).toUpperCase() || 'Assigned'}</p>
+              <p className="text-sm text-zinc-700">Agent: {order.employeeName || (order.employeeId ? `Agent ${order.employeeId.slice(-4).toUpperCase()}` : 'Assigned')}</p>
             </div>
           </div>
         </div>
+      </div>
         
-        <div className="flex justify-end gap-3 mt-4">
+      <div className="flex justify-end gap-3 mt-4">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
           <Button onClick={() => onGenerateInvoice(order)}>
             <Download className="mr-2 h-4 w-4" />
@@ -136,11 +152,13 @@ interface InvoicePreviewModalProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   onDownload: (order: Order) => void;
+  fetchedOrgs: Record<string, string>;
 }
 
-const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({ order, orgName, isOpen, onOpenChange, onDownload }) => {
+const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({ order, orgName, isOpen, onOpenChange, onDownload, fetchedOrgs }) => {
   if (!order) return null;
   const symbol = getCurrencySymbol(order.currency);
+  const supplierName = (order as any).supplierName || fetchedOrgs[order.supplierId || ""] || "Supplier";
   
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -169,13 +187,13 @@ const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({ order, orgNam
           <div className="grid grid-cols-2 gap-12 mb-12 pb-12 border-b border-zinc-100">
             <div>
               <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-4">Issued By</p>
-              <p className="font-black italic uppercase text-lg">{orgName || "TracksUp Logistics"}</p>
+              <p className="font-black italic uppercase text-lg">{supplierName}</p>
               <p className="text-sm text-zinc-500 mt-1">Network Verified Provider</p>
             </div>
             <div>
               <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-4">Billed To</p>
               <p className="font-black italic uppercase text-lg">{order.retailerName || "Valued Retailer"}</p>
-              <p className="text-sm text-zinc-500 mt-1">Authorized Logistics Endpoint</p>
+              <p className="text-sm text-zinc-500 mt-1">{orgName || "Authorized Logistics Endpoint"}</p>
             </div>
           </div>
 
@@ -245,29 +263,98 @@ const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({ order, orgNam
   );
 };
 
+import { useLocation, useNavigate } from "react-router-dom";
+
 export const RetailerDashboard = () => {
-  const { user, memberships, activeOrg, switchOrg } = useAuth();
-  const [activeTab, setActiveTab] = useState("overview");
+  const { user, memberships, activeOrg, organizations, switchOrg } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+  
+  const activeTab = useMemo(() => {
+    if (location.pathname === "/retailer") return "overview";
+    if (location.pathname === "/retailer/orders") return "orders";
+    if (location.pathname === "/retailer/history") return "history";
+    if (location.pathname === "/retailer/suppliers") return "suppliers";
+    if (location.pathname === "/retailer/marketplace") return "marketplace";
+    if (location.pathname === "/settings") return "settings";
+    return "overview";
+  }, [location.pathname]);
+
   const [orders, setOrders] = useState<Order[]>([]);
+  const [fetchedOrgs, setFetchedOrgs] = useState<Record<string, string>>({});
+  const [fetchedNames, setFetchedNames] = useState<Record<string, string>>({});
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [historyFilter, setHistoryFilter] = useState("all");
+  const [supplierFilter, setSupplierFilter] = useState("all");
   const [targetSupplierId, setTargetSupplierId] = useState<string | null>(null);
+
+  // Fetch missing names (Organizations and Employees)
+  useEffect(() => {
+    const missingSupplierIds = orders
+      .filter(o => !!o.supplierId && !(o as any).supplierName && !organizations[o.supplierId!] && !fetchedOrgs[o.supplierId!])
+      .map(o => o.supplierId as string);
+    
+    const missingEmployeeIds = orders
+      .filter(o => !!o.employeeId && !o.employeeName && !fetchedNames[o.employeeId!])
+      .map(o => o.employeeId as string);
+
+    const uniqueMissingOrgs = Array.from(new Set(missingSupplierIds)) as string[];
+    const uniqueMissingEmployees = Array.from(new Set(missingEmployeeIds)) as string[];
+
+    if (uniqueMissingOrgs.length > 0) {
+      uniqueMissingOrgs.forEach((id: string) => {
+        // Use a placeholder to avoid duplicate requests
+        setFetchedOrgs(prev => ({ ...prev, [id]: `Supplier ${id.slice(-4).toUpperCase()}` }));
+        api.get(`/auth/resolve/${id}`)
+          .then(res => {
+            const result = res.data.data;
+            if (result && result.name) setFetchedOrgs(prev => ({ ...prev, [id]: result.name }));
+          })
+          .catch(err => console.error("Error fetching org:", id, err));
+      });
+    }
+
+    if (uniqueMissingEmployees.length > 0) {
+      uniqueMissingEmployees.forEach((id: string) => {
+        setFetchedNames(prev => ({ ...prev, [id]: `Agent ${id.slice(-4).toUpperCase()}` }));
+        api.get(`/auth/resolve/${id}`)
+          .then(res => {
+            const result = res.data.data;
+            if (result && result.name) setFetchedNames(prev => ({ ...prev, [id]: result.name }));
+          })
+          .catch(err => console.error("Error fetching employee:", id, err));
+      });
+    }
+  }, [orders, organizations]);
+
+  // Compute unique suppliers for filtering
+  const uniqueSuppliers = useMemo(() => {
+    const suppliers = new Map<string, string>();
+    orders.forEach(order => {
+      const sId = order.supplierId;
+      if (!sId) return;
+      const sName = (order as any).supplierName || fetchedOrgs[sId] || organizations[sId]?.name || `Supplier ${sId.slice(-4).toUpperCase()}`;
+      suppliers.set(sId, sName);
+    });
+    return Array.from(suppliers.entries()).map(([id, name]) => ({ id, name }));
+  }, [orders, organizations, fetchedOrgs]);
   const [isInvoiceOpen, setIsInvoiceOpen] = useState(false);
   const [selectedInvoiceOrder, setSelectedInvoiceOrder] = useState<Order | null>(null);
 
   const handleViewMarketplace = (supplierId: string) => {
     setTargetSupplierId(supplierId);
-    setActiveTab("marketplace");
+    navigate("/retailer/marketplace");
   };
 
   useEffect(() => {
     if (!user || !activeOrg) return;
 
+    // Filter by retailerId AND supplierId to show data for the active account
     const ordersQuery = query(
       collection(db, "orders"), 
-      where("organizationId", "==", activeOrg.id),
       where("retailerId", "==", user.uid),
+      where("supplierId", "==", activeOrg.id),
       orderBy("createdAt", "desc")
     );
     
@@ -278,7 +365,7 @@ export const RetailerDashboard = () => {
       });
       setOrders(Array.from(uniqueOrders.values()));
     }, (error) => {
-      console.error("Orders listener error:", error);
+      handleFirestoreError(error, OperationType.GET, "orders");
     });
 
     return () => unsubscribe();
@@ -293,7 +380,7 @@ export const RetailerDashboard = () => {
     doc.setFontSize(10);
     doc.text(`Invoice ID: ${order.id.toUpperCase()}`, 20, 40);
     doc.text(`Date: ${format(new Date(), 'PPpp')}`, 20, 45);
-    doc.text(`Organization: ${activeOrg?.name}`, 20, 50);
+    doc.text(`Supplier: ${order.supplierName || activeOrg?.name || "Verified Partner"}`, 20, 50);
     
     doc.text("BILL TO:", 20, 60);
     doc.text(order.retailerName, 20, 65);
@@ -339,54 +426,52 @@ export const RetailerDashboard = () => {
 
   return (
     <DashboardLayout
-      activeTab={activeTab}
-      onTabChange={setActiveTab}
       title="Terminal Dashboard"
       subtitle={activeOrg?.name}
     >
       <div className="space-y-8">
         {activeTab === "overview" && (
-          <div className="space-y-8">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="space-y-4 md:space-y-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
               <Card className="border-none shadow-sm bg-white overflow-hidden rounded-3xl group hover:scale-[1.02] transition-all">
-                <CardHeader className="pb-2">
+                <CardHeader className="pb-2 p-4 md:p-6">
                   <CardDescription className="text-[10px] font-black uppercase text-zinc-500 tracking-widest">Aggregate Orders</CardDescription>
-                  <CardTitle className="text-3xl font-black italic tracking-tighter">{stats.totalOrders}</CardTitle>
+                  <CardTitle className="text-2xl md:text-3xl font-black italic tracking-tighter">{stats.totalOrders}</CardTitle>
                 </CardHeader>
-                <div className="px-6 pb-4">
+                <div className="px-4 md:px-6 pb-4">
                   <div className="h-1.5 w-full bg-zinc-50 rounded-full overflow-hidden">
                     <div className="h-full bg-zinc-900 rounded-full" style={{ width: '100%' }} />
                   </div>
                 </div>
               </Card>
               <Card className="border-none shadow-sm bg-white overflow-hidden rounded-3xl group hover:scale-[1.02] transition-all">
-                <CardHeader className="pb-2">
+                <CardHeader className="pb-2 p-4 md:p-6">
                   <CardDescription className="text-[10px] font-black uppercase text-zinc-500 tracking-widest">Active Transit</CardDescription>
-                  <CardTitle className="text-3xl font-black italic tracking-tighter">{stats.activeDeliveries}</CardTitle>
+                  <CardTitle className="text-2xl md:text-3xl font-black italic tracking-tighter">{stats.activeDeliveries}</CardTitle>
                 </CardHeader>
-                <div className="px-6 pb-4">
+                <div className="px-4 md:px-6 pb-4">
                   <div className="h-1.5 w-full bg-zinc-50 rounded-full overflow-hidden">
                     <div className="h-full bg-orange-500 rounded-full" style={{ width: `${(stats.activeDeliveries / stats.totalOrders) * 100 || 0}%` }} />
                   </div>
                 </div>
               </Card>
               <Card className="border-none shadow-sm bg-white overflow-hidden rounded-3xl group hover:scale-[1.02] transition-all">
-                <CardHeader className="pb-2">
+                <CardHeader className="pb-2 p-4 md:p-6">
                   <CardDescription className="text-[10px] font-black uppercase text-zinc-500 tracking-widest">Gross Expenditure</CardDescription>
-                  <CardTitle className="text-3xl font-black italic tracking-tighter">{formatCurrency(stats.totalSpent)}</CardTitle>
+                  <CardTitle className="text-2xl md:text-3xl font-black italic tracking-tighter">{formatCurrency(stats.totalSpent)}</CardTitle>
                 </CardHeader>
-                <div className="px-6 pb-4">
+                <div className="px-4 md:px-6 pb-4">
                   <div className="h-1.5 w-full bg-zinc-50 rounded-full overflow-hidden">
                     <div className="h-full bg-indigo-600 rounded-full" style={{ width: '100%' }} />
                   </div>
                 </div>
               </Card>
               <Card className="border-none shadow-sm bg-rose-50 overflow-hidden rounded-3xl group hover:scale-[1.02] transition-all">
-                <CardHeader className="pb-2">
+                <CardHeader className="pb-2 p-4 md:p-6">
                   <CardDescription className="text-[10px] font-black uppercase text-rose-500 tracking-widest">Pending Settlement</CardDescription>
-                  <CardTitle className="text-3xl font-black italic tracking-tighter text-rose-600">{formatCurrency(stats.pendingPayments)}</CardTitle>
+                  <CardTitle className="text-2xl md:text-3xl font-black italic tracking-tighter text-rose-600">{formatCurrency(stats.pendingPayments)}</CardTitle>
                 </CardHeader>
-                <div className="px-6 pb-4">
+                <div className="px-4 md:px-6 pb-4">
                   <div className="h-1.5 w-full bg-rose-100 rounded-full overflow-hidden">
                     <div className="h-full bg-rose-600 rounded-full" style={{ width: `${(stats.pendingPayments / stats.totalSpent) * 100 || 0}%` }} />
                   </div>
@@ -452,8 +537,30 @@ export const RetailerDashboard = () => {
 
         {(activeTab === "orders" || activeTab === "tracking") && (
           <div className="space-y-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <h3 className="text-xl font-black uppercase italic tracking-tight">Active Transit</h3>
+              <div className="flex items-center gap-3 bg-zinc-50 p-1.5 rounded-2xl border border-zinc-200 overflow-x-auto no-scrollbar">
+                <Select value={supplierFilter} onValueChange={setSupplierFilter}>
+                  <SelectTrigger className="w-[160px] h-9 border-none bg-white rounded-xl shadow-sm text-[10px] font-black uppercase tracking-widest whitespace-nowrap">
+                    <SelectValue placeholder="Supplier Filter">
+                      {supplierFilter === "all" ? "Every Supplier" : (uniqueSuppliers.find(s => s.id === supplierFilter)?.name || fetchedOrgs[supplierFilter] || "Supplier Filter")}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl">
+                    <SelectItem value="all">Every Supplier</SelectItem>
+                    {uniqueSuppliers.map(s => (
+                      <SelectItem key={`filter-active-${s.id}`} value={s.id}>{s.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 gap-6">
-              {orders.filter(o => o.status !== 'delivered').map(order => {
+              {orders
+                .filter(o => o.status !== 'delivered')
+                .filter(o => supplierFilter === 'all' || o.supplierId === supplierFilter)
+                .map(order => {
                 const currentStep = getStatusStep(order.status);
                 return (
                   <Card key={`transit-order-${order.id}`} className="overflow-hidden border-none shadow-xl rounded-3xl bg-white border-l-8 border-l-zinc-900 group">
@@ -464,8 +571,15 @@ export const RetailerDashboard = () => {
                           <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity" />
                         </div>
                         <div className="space-y-1">
-                          <CardTitle className="text-xl font-black uppercase italic tracking-tight">Order #{order.id.slice(-8).toUpperCase()}</CardTitle>
-                          <CardDescription className="text-[10px] font-bold uppercase tracking-widest">Target Window: {order.deliveryDate}</CardDescription>
+                          <CardTitle className="text-xl font-black uppercase italic tracking-tight">
+                            { (order as any).supplierName || organizations[order.supplierId || ""]?.name || fetchedOrgs[order.supplierId || ""] || `Order #${order.id.slice(-8).toUpperCase()}` }
+                          </CardTitle>
+                          <CardDescription className="text-[10px] font-bold uppercase tracking-widest">
+                            { (order as any).supplierName || organizations[order.supplierId || ""]?.name || fetchedOrgs[order.supplierId || ""] ? `Manifest #${order.id.slice(-8).toUpperCase()}` : `Target Window: ${order.deliveryDate}` }
+                          </CardDescription>
+                          { ((order as any).supplierName || organizations[order.supplierId || ""]?.name || fetchedOrgs[order.supplierId || ""]) && (
+                             <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Target Window: {order.deliveryDate}</p>
+                          )}
                         </div>
                       </div>
                       <Button variant="outline" className="rounded-xl font-black uppercase text-[10px] tracking-widest h-11 border-zinc-100 px-6" onClick={() => { setSelectedOrder(order); setIsDetailOpen(true); }}>
@@ -508,7 +622,7 @@ export const RetailerDashboard = () => {
                           {order.employeeId?.charAt(0) || "A"}
                         </div>
                         <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
-                          {order.employeeId ? `Agent ID: ${order.employeeId.slice(-8).toUpperCase()}` : 'Buffer: Assigning Agent...'}
+                          {order.employeeName || fetchedNames[order.employeeId || ""] || (order.employeeId ? `Agent: ${order.employeeId.slice(-8).toUpperCase()}` : 'Buffer: Assigning Agent...')}
                         </span>
                       </div>
                       <Badge className={`rounded-lg font-black uppercase text-[10px] h-7 italic tracking-widest ${order.status === 'out_for_delivery' ? 'bg-orange-500 animate-pulse' : 'bg-zinc-900'}`}>
@@ -530,9 +644,23 @@ export const RetailerDashboard = () => {
 
         {(activeTab === "history" || activeTab === "invites") && (
           <div className="space-y-6">
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-2">
               <h3 className="text-xl font-black uppercase italic tracking-tight">Archive Registry</h3>
-              <div className="flex items-center gap-3 bg-zinc-50 p-1.5 rounded-2xl border border-zinc-200">
+              <div className="flex items-center gap-3 bg-zinc-50 p-1.5 rounded-2xl border border-zinc-200 overflow-x-auto no-scrollbar">
+                <Select value={supplierFilter} onValueChange={setSupplierFilter}>
+                  <SelectTrigger className="w-[160px] h-9 border-none bg-white rounded-xl shadow-sm text-[10px] font-black uppercase tracking-widest whitespace-nowrap">
+                    <SelectValue placeholder="Supplier Filter">
+                      {supplierFilter === "all" ? "Every Supplier" : (uniqueSuppliers.find(s => s.id === supplierFilter)?.name || fetchedOrgs[supplierFilter] || "Supplier Filter")}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl">
+                    <SelectItem value="all">Every Supplier</SelectItem>
+                    {uniqueSuppliers.map(s => (
+                      <SelectItem key={`filter-history-${s.id}`} value={s.id}>{s.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
                 <Select value={historyFilter} onValueChange={setHistoryFilter}>
                   <SelectTrigger className="w-[140px] h-9 border-none bg-white rounded-xl shadow-sm text-[10px] font-black uppercase tracking-widest">
                     <SelectValue placeholder="System Filter" />
@@ -551,6 +679,7 @@ export const RetailerDashboard = () => {
               {orders
                 .filter(o => o.status === 'delivered')
                 .filter(o => historyFilter === 'all' || o.payment_status === historyFilter)
+                .filter(o => supplierFilter === 'all' || o.supplierId === supplierFilter)
                 .map(order => (
                   <Card key={`history-order-${order.id}`} className="hover:border-zinc-900 transition-all cursor-pointer group bg-white rounded-3xl border-none shadow-sm hover:shadow-xl" onClick={() => { setSelectedOrder(order); setIsDetailOpen(true); }}>
                     <CardContent className="p-6 flex items-center justify-between">
@@ -559,8 +688,13 @@ export const RetailerDashboard = () => {
                           <CheckCircle className="h-6 w-6" />
                         </div>
                         <div>
-                          <p className="text-sm font-black text-zinc-900 group-hover:text-primary transition-colors uppercase italic">#{order.id.slice(-8).toUpperCase()}</p>
-                          <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">{order.delivered_at ? format(new Date(order.delivered_at), 'PPP') : 'Delivered'}</p>
+                          <p className="text-sm font-black text-zinc-900 group-hover:text-primary transition-colors uppercase italic">
+                            { (order as any).supplierName || organizations[order.supplierId || ""]?.name || fetchedOrgs[order.supplierId || ""] || `Order #${order.id.slice(-8).toUpperCase()}` }
+                          </p>
+                          <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">
+                            { (order as any).supplierName || organizations[order.supplierId || ""]?.name || fetchedOrgs[order.supplierId || ""] ? `Manifest #${order.id.slice(-8).toUpperCase()} • ` : "" }
+                            {order.delivered_at ? format(new Date(order.delivered_at), 'PPP') : 'Delivered'}
+                          </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-12">
@@ -603,29 +737,48 @@ export const RetailerDashboard = () => {
             </div>
 
             <Card className="border-none shadow-2xl rounded-3xl overflow-hidden bg-white">
-              <CardHeader className="p-8 border-b border-zinc-50">
-                <CardTitle className="text-xl font-black uppercase italic tracking-tight">Audit Ledger</CardTitle>
-                <CardDescription className="text-[10px] font-bold uppercase tracking-widest">Master organizational balance sheet</CardDescription>
+              <CardHeader className="p-4 md:p-8 border-b border-zinc-50 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <CardTitle className="text-lg md:text-xl font-black uppercase italic tracking-tight">Audit Ledger</CardTitle>
+                  <CardDescription className="text-[10px] font-bold uppercase tracking-widest">Master organizational balance sheet</CardDescription>
+                </div>
+                <div className="flex items-center gap-3 bg-zinc-50 p-1.5 rounded-2xl border border-zinc-200">
+                  <Select value={supplierFilter} onValueChange={setSupplierFilter}>
+                    <SelectTrigger className="w-[160px] h-9 border-none bg-white rounded-xl shadow-sm text-[10px] font-black uppercase tracking-widest whitespace-nowrap">
+                      <SelectValue placeholder="Supplier Filter">
+                        {supplierFilter === "all" ? "Every Supplier" : (uniqueSuppliers.find(s => s.id === supplierFilter)?.name || fetchedOrgs[supplierFilter] || "Supplier Filter")}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl">
+                      <SelectItem value="all">Every Supplier</SelectItem>
+                      {uniqueSuppliers.map(s => (
+                        <SelectItem key={`filter-ledger-${s.id}`} value={s.id}>{s.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </CardHeader>
-              <CardContent className="p-0">
+              <CardContent className="p-0 overflow-x-auto">
                 <Table>
                   <TableHeader className="bg-zinc-900">
                     <TableRow>
-                      <TableHead className="font-black text-[10px] uppercase tracking-widest text-zinc-400 px-8 h-14">Order ID</TableHead>
-                      <TableHead className="font-black text-[10px] uppercase tracking-widest text-zinc-400 px-8 h-14">Entry Date</TableHead>
-                      <TableHead className="font-black text-[10px] uppercase tracking-widest text-zinc-400 px-8 h-14 text-center">Status</TableHead>
-                      <TableHead className="font-black text-[10px] uppercase tracking-widest text-zinc-400 px-8 h-14 text-right">Value</TableHead>
+                      <TableHead className="font-black text-[10px] uppercase tracking-widest text-zinc-400 px-4 md:px-8 h-14">Order ID</TableHead>
+                      <TableHead className="font-black text-[10px] uppercase tracking-widest text-zinc-400 px-4 md:px-8 h-14">Entry Date</TableHead>
+                      <TableHead className="font-black text-[10px] uppercase tracking-widest text-zinc-400 px-4 md:px-8 h-14 text-center">Status</TableHead>
+                      <TableHead className="font-black text-[10px] uppercase tracking-widest text-zinc-400 px-4 md:px-8 h-14 text-right">Value</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {orders.map(order => (
+                    {orders
+                      .filter(o => supplierFilter === 'all' || o.supplierId === supplierFilter)
+                      .map(order => (
                       <TableRow key={`ledger-order-${order.id}`} className="hover:bg-zinc-50 transition-colors">
-                        <TableCell className="px-8 py-5">
+                        <TableCell className="px-4 md:px-8 py-5">
                            <span className="font-mono text-[10px] font-black text-zinc-400 bg-zinc-100 px-2 py-1 rounded">#{order.id.slice(-8).toUpperCase()}</span>
                         </TableCell>
-                        <TableCell className="px-8 py-5 font-bold text-zinc-600 text-xs uppercase uppercase italic">{order.createdAt?.toDate ? format(order.createdAt.toDate(), 'PP') : '...'}</TableCell>
-                        <TableCell className="px-8 py-5 text-center">{getPaymentBadge(order.payment_status)}</TableCell>
-                        <TableCell className="px-8 py-5 text-right font-black italic tracking-tighter text-sm">${order.totalAmount.toFixed(2)}</TableCell>
+                        <TableCell className="px-4 md:px-8 py-5 font-bold text-zinc-600 text-xs uppercase italic whitespace-nowrap">{order.createdAt?.toDate ? format(order.createdAt.toDate(), 'PP') : '...'}</TableCell>
+                        <TableCell className="px-4 md:px-8 py-5 text-center">{getPaymentBadge(order.payment_status)}</TableCell>
+                        <TableCell className="px-4 md:px-8 py-5 text-right font-black italic tracking-tighter text-sm whitespace-nowrap">${order.totalAmount.toFixed(2)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -638,13 +791,32 @@ export const RetailerDashboard = () => {
         {activeTab === "invoices" && (
           <div className="space-y-6">
             <Card className="border-none shadow-2xl rounded-3xl overflow-hidden bg-white">
-              <CardHeader className="p-8 border-b border-zinc-50">
-                <CardTitle className="text-xl font-black uppercase italic tracking-tight">Tax Documentation</CardTitle>
-                <CardDescription className="text-[10px] font-bold uppercase tracking-widest">Download compliance-ready logistics receipts</CardDescription>
+              <CardHeader className="p-8 border-b border-zinc-50 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <CardTitle className="text-xl font-black uppercase italic tracking-tight">Tax Documentation</CardTitle>
+                  <CardDescription className="text-[10px] font-bold uppercase tracking-widest">Download compliance-ready logistics receipts</CardDescription>
+                </div>
+                <div className="flex items-center gap-3 bg-zinc-50 p-1.5 rounded-2xl border border-zinc-200">
+                  <Select value={supplierFilter} onValueChange={setSupplierFilter}>
+                    <SelectTrigger className="w-[160px] h-9 border-none bg-white rounded-xl shadow-sm text-[10px] font-black uppercase tracking-widest whitespace-nowrap">
+                      <SelectValue placeholder="Supplier Filter">
+                        {supplierFilter === "all" ? "Every Supplier" : (uniqueSuppliers.find(s => s.id === supplierFilter)?.name || fetchedOrgs[supplierFilter] || "Supplier Filter")}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl">
+                      <SelectItem value="all">Every Supplier</SelectItem>
+                      {uniqueSuppliers.map(s => (
+                        <SelectItem key={`filter-invoices-${s.id}`} value={s.id}>{s.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </CardHeader>
               <CardContent className="p-0">
                 <div className="divide-y divide-zinc-50">
-                  {orders.map(order => (
+                  {orders
+                    .filter(o => supplierFilter === 'all' || o.supplierId === supplierFilter)
+                    .map(order => (
                     <div key={`invoice-order-${order.id}`} className="flex items-center justify-between p-8 px-10 hover:bg-zinc-50 transition-all group">
                       <div className="flex items-center gap-6">
                         <div className="h-14 w-14 text-rose-600 bg-rose-50 flex items-center justify-center rounded-2xl group-hover:rotate-3 transition-transform shadow-sm">
@@ -684,6 +856,8 @@ export const RetailerDashboard = () => {
             isOpen={isDetailOpen} 
             onOpenChange={setIsDetailOpen} 
             onGenerateInvoice={generateInvoice}
+            fetchedOrgs={fetchedOrgs}
+            organizations={organizations}
           />
         )}
 
@@ -694,6 +868,7 @@ export const RetailerDashboard = () => {
             isOpen={isInvoiceOpen}
             onOpenChange={setIsInvoiceOpen}
             onDownload={generateInvoice}
+            fetchedOrgs={fetchedOrgs}
           />
         )}
       </div>

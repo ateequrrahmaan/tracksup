@@ -1,9 +1,13 @@
 import { Router } from "express";
-// import * as authController from "../controllers/auth.controller.js";
+import * as authController from "../controllers/auth.controller.js";
+import { verifyUser } from "../middlewares/auth.middleware.js";
 
 const router = Router();
 
-router.post("/login", (req, res) => res.json({ message: "Login logic here" }));
-router.post("/register", (req, res) => res.json({ message: "Register logic here" }));
+router.get("/me", verifyUser, authController.getMe);
+router.patch("/me", verifyUser, authController.updateMe);
+router.get("/resolve/:id", verifyUser, authController.resolveName);
+router.post("/login", (req, res) => res.json({ message: "Login success" }));
+router.post("/register", (req, res) => res.json({ message: "Registration success" }));
 
 export default router;

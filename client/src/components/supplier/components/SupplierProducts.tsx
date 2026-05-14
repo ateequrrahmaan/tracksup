@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import api from "@/services/api";
 import { Product, Order, SystemUser } from "@/types";
 import { formatCurrency, CURRENCIES } from "@/constants";
 import { useAuth } from "@/lib/auth-context";
@@ -78,14 +79,8 @@ export const SupplierProducts: React.FC<SupplierProductsProps> = ({
     if (!activeOrg) return;
     setLoading(true);
     try {
-      const q = query(
-        collection(db, "products"),
-        where("supplierId", "==", activeOrg.id),
-        orderBy("name", "asc")
-      );
-      const snapshot = await getDocs(q);
-      const productsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
-      setProducts(productsData);
+      const response = await api.get("/products");
+      setProducts(response.data.data);
     } catch (error) {
       console.error("Error fetching products:", error);
       toast.error("Failed to fetch inventory vector.");
@@ -106,18 +101,13 @@ export const SupplierProducts: React.FC<SupplierProductsProps> = ({
         price: parseFloat(price),
         currency,
         imageUrl: imageUrl || `https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?q=80&w=400&auto=format&fit=crop`,
-        supplierId: activeOrg.id,
-        updatedAt: serverTimestamp(),
       };
 
       if (editingProduct) {
-        await updateDoc(doc(db, "products", editingProduct.id), productData);
+        await api.put(`/products/${editingProduct.id}`, productData);
         toast.success("Product schema updated.");
       } else {
-        await addDoc(collection(db, "products"), {
-          ...productData,
-          createdAt: serverTimestamp(),
-        });
+        await api.post("/products", productData);
         toast.success("New product node initialized.");
       }
 
@@ -146,7 +136,7 @@ export const SupplierProducts: React.FC<SupplierProductsProps> = ({
     if (!confirm("Confirm permanent deletion of product node?")) return;
     setIsDeleting(id);
     try {
-      await deleteDoc(doc(db, "products", id));
+      await api.delete(`/products/${id}`);
       toast.success("Product node purged from registry.");
       fetchProducts();
     } catch (error) {
@@ -258,7 +248,7 @@ export const SupplierProducts: React.FC<SupplierProductsProps> = ({
                       className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                       referrerPolicy="no-referrer"
                     />
-                    <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="absolute top-4 right-4 flex gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                       <Button 
                         size="sm" 
                         variant="secondary" 

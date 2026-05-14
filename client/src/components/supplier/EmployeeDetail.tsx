@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, User, Mail, Shield, CheckCircle, Clock, Package, BarChart3, TrendingUp } from "lucide-react";
 import { Order, SystemUser } from "@/types";
+import api from "@/services/api";
 
 export const EmployeeDetail = () => {
   const { id } = useParams();
@@ -59,10 +60,10 @@ export const EmployeeDetail = () => {
           successRate: Math.round(rate)
         });
 
-        // Trigger Backend API calls as requested in Feature 4
-        fetch(`/api/employees/${id}`).catch(console.error);
-        fetch(`/api/employees/${id}/orders`).catch(console.error);
-        fetch(`/api/employees/${id}/performance`).catch(console.error);
+        // Trigger Backend API calls
+        api.get(`/employees/${id}`).catch(console.error);
+        api.get(`/employees/${id}/orders`).catch(console.error);
+        api.get(`/employees/${id}/performance`).catch(console.error);
 
       } catch (error) {
         console.error("Error fetching employee data:", error);

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useParams, useLocation } from "react-router-dom";
 import { doc, setDoc, updateDoc, getDoc, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/lib/auth-context";
@@ -7,17 +8,21 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { toast } from "sonner";
 import { CheckCircle, AlertTriangle, Clock, ArrowRight, Package2 } from "lucide-react";
 import { Invite, Organization } from "@/types";
+import api from "@/services/api";
 
 export const InvitePage = () => {
-  const { user, firebaseUser } = useAuth();
+  const { user, firebaseUser, memberships, loading: authLoading } = useAuth();
+  const { token: routeToken } = useParams();
+  const location = useLocation();
   const [loading, setLoading] = useState(true);
   const [invite, setInvite] = useState<Invite | null>(null);
   const [org, setOrg] = useState<Organization | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [alreadyMember, setAlreadyMember] = useState(false);
+  const [memberOfAnother, setMemberOfAnother] = useState(false);
 
-  const urlParams = new URLSearchParams(window.location.search);
-  const token = urlParams.get("token");
+  const urlParams = new URLSearchParams(location.search);
+  const token = routeToken || urlParams.get("token");
 
   useEffect(() => {
     const fetchInvite = async () => {
@@ -45,23 +50,29 @@ export const InvitePage = () => {
           } else {
             setInvite(inviteData);
             
-            // Try to fetch org details, but don't fail if it's permission denied (we have the name in invite)
+            // Check existing memberships from auth context
+            const activeMemberships = memberships.filter(m => m.status === "active");
+            const currentOrgMembership = activeMemberships.find(m => m.organizationId === inviteData.organizationId);
+            
+            if (currentOrgMembership) {
+              setAlreadyMember(true);
+            } else if (activeMemberships.length > 0) {
+              const isJoiningAsRetailer = inviteData.role === 'retailer';
+              const isCurrentlyRetailerOnly = activeMemberships.every(m => m.role === 'retailer');
+              
+              if (!isJoiningAsRetailer || !isCurrentlyRetailerOnly) {
+                setMemberOfAnother(true);
+              }
+            }
+
+            // Try to fetch org details
             try {
               const orgSnap = await getDoc(doc(db, "organizations", inviteData.organizationId));
               if (orgSnap.exists()) {
                 setOrg({ id: orgSnap.id, ...orgSnap.data() } as Organization);
-                
-                // Check if already a member
-                if (user) {
-                  const memSnap = await getDoc(doc(db, "memberships", `${user.uid}_${orgSnap.id}`));
-                  if (memSnap.exists()) {
-                    setAlreadyMember(true);
-                  }
-                }
               }
             } catch (orgErr) {
               console.log("Could not fetch full org details (expected for new users)");
-              // Fallback org object with just name and id
               setOrg({ 
                 id: inviteData.organizationId, 
                 name: (inviteData as any).organizationName || "the organization" 
@@ -77,34 +88,23 @@ export const InvitePage = () => {
     };
 
     fetchInvite();
-  }, [token, user]);
+  }, [token, user, memberships]);
 
   const handleAccept = async () => {
     if (!invite || !org || !user) return;
 
     try {
-      // 1. Create membership
-      await setDoc(doc(db, "memberships", `${user.uid}_${org.id}`), {
-        userId: user.uid,
-        organizationId: org.id,
-        role: invite.role,
-        status: "active",
-      });
-
-      // 2. Update invite status
-      await updateDoc(doc(db, "invites", invite.id), {
-        status: "accepted",
-        acceptedBy: user.uid
-      });
-
+      await api.post("/organizations/join", { token });
       toast.success(`Welcome to ${org.name}!`);
       window.location.href = "/";
-    } catch (err) {
-      toast.error("Failed to accept invite");
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error?.message || err.response?.data?.message || "Failed to accept invite";
+      toast.error(errorMsg);
+      console.error("Invite Accept Error:", err);
     }
   };
 
-  if (loading) {
+  if (loading || authLoading) {
     return <div className="flex min-h-screen items-center justify-center">Checking invitation...</div>;
   }
 
@@ -170,6 +170,37 @@ export const InvitePage = () => {
     );
   }
 
+  if (memberOfAnother) {
+    const isEmployee = memberships.some(m => m.role === 'employee');
+    return (
+      <div className="flex min-h-screen items-center justify-center p-4">
+        <Card className="max-w-md w-full border-orange-100 bg-orange-50/10 shadow-xl">
+          <CardHeader className="text-center">
+            <AlertTriangle className="h-12 w-12 text-orange-500 mx-auto mb-4" />
+            <CardTitle>{isEmployee ? "Employee Policy" : "One Organization at a Time"}</CardTitle>
+            <CardDescription className="text-base">
+              {isEmployee 
+                ? "As an employee, you are restricted to one active organization at a time."
+                : "You are currently an active member of another organization."}
+              <br />
+              To join <strong>{org?.name}</strong>, you must first leave your current team.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="text-center pb-2">
+            <p className="text-sm text-zinc-500 italic">
+               (System Policy: {isEmployee ? "Employees may only serve one supplier" : "One active membership permitted for your role"})
+            </p>
+          </CardContent>
+          <CardFooter>
+            <Button className="w-full h-12" variant="outline" onClick={() => window.location.href = "/"}>
+              Return to Dashboard
+            </Button>
+          </CardFooter>
+        </Card>
+      </div>
+    );
+  }
+
   const isEmailMatch = user.email === invite?.email;
 
   return (
@@ -181,7 +212,7 @@ export const InvitePage = () => {
           </div>
           <CardTitle className="text-2xl font-bold">Join the Team</CardTitle>
           <CardDescription className="text-lg">
-            Join <span className="font-semibold text-zinc-900">{org?.name}</span> as a <span className="capitalize text-primary">{invite?.role}</span>
+            Join <span className="font-semibold text-zinc-900">{org?.name}</span> as {invite?.role === 'employee' ? 'an' : 'a'} <span className="capitalize text-primary">{invite?.role}</span>
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-6 space-y-4">

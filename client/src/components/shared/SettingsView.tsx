@@ -1,18 +1,58 @@
 import React from "react";
 import { useAuth } from "@/lib/auth-context";
+import api from "@/services/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { User, Mail, Building, Shield, Bell, Lock } from "lucide-react";
+import { User, Mail, Building, Shield, Bell, Lock, LogOut } from "lucide-react";
 import { toast } from "sonner";
 
 export const SettingsView = () => {
-  const { user, activeRole, activeOrg } = useAuth();
+  const { user, activeRole, activeOrg, refreshContext, logout } = useAuth();
+  const [userName, setUserName] = React.useState(user?.name || "");
+  const [orgName, setOrgName] = React.useState(activeOrg?.name || "");
+  const [isSaving, setIsSaving] = React.useState(false);
+  const [isLoggingOut, setIsLoggingOut] = React.useState(false);
 
-  const handleSave = (e: React.FormEvent) => {
+  React.useEffect(() => {
+    if (user?.name) setUserName(user.name);
+  }, [user?.name]);
+
+  React.useEffect(() => {
+    if (activeOrg?.name) setOrgName(activeOrg.name);
+  }, [activeOrg?.name]);
+
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast.success("Settings updated successfully.");
+    setIsSaving(true);
+    try {
+      // 1. Update Personal Name
+      if (userName !== user?.name) {
+        await api.patch("/auth/me", { name: userName });
+      }
+
+      // 2. Update Org Name (if owner)
+      if (activeOrg && orgName !== activeOrg.name) {
+        await api.patch(`/organizations/${activeOrg.id}`, { name: orgName });
+      }
+
+      await refreshContext?.();
+      toast.success("Settings updated successfully.");
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Failed to update settings");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      await logout();
+    } catch (error) {
+      setIsLoggingOut(false);
+    }
   };
 
   return (
@@ -29,10 +69,10 @@ export const SettingsView = () => {
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_100%_0%,rgba(59,130,246,0.2),transparent)]" />
               <div className="relative z-10 flex items-center gap-8">
                 <div className="h-24 w-24 rounded-[2rem] bg-white text-zinc-900 flex items-center justify-center text-4xl font-black italic shadow-2xl border-4 border-white/20">
-                  {user?.name?.charAt(0) || "A"}
+                  {userName?.charAt(0) || "A"}
                 </div>
                 <div>
-                  <CardTitle className="text-3xl font-black uppercase italic tracking-tighter">{user?.name || "Agent"}</CardTitle>
+                  <CardTitle className="text-3xl font-black uppercase italic tracking-tighter">{userName || "Agent"}</CardTitle>
                   <CardDescription className="text-[11px] font-black uppercase tracking-[0.3em] text-zinc-500 mt-2 italic shadow-sm">
                     {activeRole} • Verified
                   </CardDescription>
@@ -46,29 +86,37 @@ export const SettingsView = () => {
                     <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-1">Full Name</Label>
                     <div className="relative group">
                       <User className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400 group-focus-within:text-zinc-900 transition-colors" />
-                      <Input defaultValue={user?.name || ""} className="pl-12 h-14 rounded-2xl bg-zinc-50 border-zinc-100 focus:ring-zinc-900 transition-all font-bold text-sm" />
+                      <Input 
+                        value={userName} 
+                        onChange={(e) => setUserName(e.target.value)}
+                        className="pl-12 h-14 rounded-2xl bg-zinc-50 border-zinc-100 focus:ring-zinc-900 transition-all font-bold text-sm" 
+                      />
                     </div>
                   </div>
                   <div className="space-y-3">
                     <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-1">Email Address</Label>
                     <div className="relative group">
-                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400 group-focus-within:text-zinc-900 transition-colors" />
-                      <Input defaultValue={user?.email || ""} className="pl-12 h-14 rounded-2xl bg-zinc-50 border-zinc-200 focus:ring-zinc-900 transition-all font-bold text-sm" disabled />
+                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
+                      <Input value={user?.email || ""} className="pl-12 h-14 rounded-2xl bg-zinc-50 border-zinc-200 font-bold text-sm" disabled />
                     </div>
                   </div>
                 </div>
 
-                <div className="space-y-6 pt-4">
-                   <div className="flex items-center gap-4 border-b border-zinc-100 pb-4">
-                      <div className="h-10 w-10 rounded-xl bg-zinc-100 flex items-center justify-center">
-                        <Building className="h-5 w-5 text-zinc-900" />
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Current Business</p>
-                        <p className="text-base font-black italic uppercase tracking-tight">{activeOrg?.name || "Global Network"}</p>
-                      </div>
-                   </div>
+                <div className="space-y-3">
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-1">
+                    {activeRole === 'retailer' ? 'Shop Name' : 'Organization Name'}
+                  </Label>
+                  <div className="relative group">
+                    <Building className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400 group-focus-within:text-zinc-900 transition-colors" />
+                    <Input 
+                      value={orgName} 
+                      onChange={(e) => setOrgName(e.target.value)}
+                      className="pl-12 h-14 rounded-2xl bg-zinc-50 border-zinc-100 focus:ring-zinc-900 transition-all font-bold text-sm" 
+                    />
+                  </div>
+                </div>
 
+                <div className="space-y-6 pt-4">
                    <div className="flex items-center gap-4">
                       <div className="h-10 w-10 rounded-xl bg-zinc-100 flex items-center justify-center">
                         <Shield className="h-5 w-5 text-zinc-900" />
@@ -80,8 +128,12 @@ export const SettingsView = () => {
                    </div>
                 </div>
 
-                <Button type="submit" className="w-full md:w-auto px-10 h-14 rounded-2xl bg-zinc-900 text-white font-black uppercase tracking-widest text-[11px] italic shadow-xl hover:scale-[1.02] transition-all">
-                  Save Changes
+                <Button 
+                  type="submit" 
+                  disabled={isSaving}
+                  className="w-full md:w-auto px-10 h-14 rounded-2xl bg-zinc-900 text-white font-black uppercase tracking-widest text-[11px] italic shadow-xl hover:scale-[1.02] transition-all disabled:opacity-50"
+                >
+                  {isSaving ? "Saving..." : "Save Changes"}
                 </Button>
               </form>
             </CardContent>
@@ -129,6 +181,16 @@ export const SettingsView = () => {
                 </div>
               </div>
            </Card>
+
+           <Button 
+               onClick={handleLogout}
+               variant="outline"
+               disabled={isLoggingOut}
+               className="w-full h-16 rounded-[2rem] border-rose-100 bg-rose-50/30 text-rose-600 font-black uppercase tracking-widest text-[11px] italic hover:bg-rose-600 hover:text-white hover:border-rose-600 transition-all group mt-8 disabled:opacity-50"
+            >
+              <LogOut className={`mr-3 h-4 w-4 transition-all ${isLoggingOut ? 'animate-pulse' : 'group-hover:scale-110'}`} />
+              {isLoggingOut ? "Terminating..." : "Terminate Session"}
+            </Button>
         </div>
       </div>
     </div>

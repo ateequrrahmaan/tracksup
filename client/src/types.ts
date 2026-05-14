@@ -49,6 +49,8 @@ export interface Order {
   retailerId: string;
   retailerName: string;
   employeeId?: string;
+  employeeName?: string;
+  supplierName?: string;
   status: "pending" | "assigned" | "out_for_delivery" | "delivered";
   totalAmount: number;
   currency: string;

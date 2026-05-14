@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, addDoc, updateDoc, setDoc, deleteDoc, doc, serverTimestamp, getDoc, Timestamp } from "firebase/firestore";
+import { db, handleFirestoreError, OperationType } from "@/lib/firebase";
+import { collection, query, where, onSnapshot, addDoc, updateDoc, setDoc, deleteDoc, doc, serverTimestamp, getDoc, getDocs, Timestamp } from "firebase/firestore";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Plus, UserPlus, Copy } from "lucide-react";
@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { DashboardLayout } from "../shared/DashboardLayout";
+import api from "@/services/api";
 import { Order, SystemUser, Invite } from "@/types";
 import { OrderDetailsDialog } from "./components/OrderDetailsDialog";
 import { NewOrderDialog } from "./components/NewOrderDialog";
@@ -19,11 +20,28 @@ import { SupplierInsights } from "./components/SupplierInsights";
 import { SupplierNetwork } from "./components/SupplierNetwork";
 import { SupplierInvites } from "./components/SupplierInvites";
 import { SupplierProducts } from "./components/SupplierProducts";
+import { StrategicTools } from "./components/StrategicTools";
 import { SettingsView } from "../shared/SettingsView";
+
+import { useLocation } from "react-router-dom";
 
 export const SupplierDashboard = () => {
   const { user, activeOrg } = useAuth();
-  const [activeTab, setActiveTab] = useState("overview");
+  const location = useLocation();
+  
+  // Determine active tab from URL path
+  const activeTab = useMemo(() => {
+    if (location.pathname === "/supplier") return "overview";
+    if (location.pathname === "/supplier/orders") return "orders";
+    if (location.pathname === "/supplier/performance") return "insights";
+    if (location.pathname === "/supplier/strategy") return "strategy";
+    if (location.pathname === "/supplier/retailers" || location.pathname === "/supplier/employees") return "network";
+    if (location.pathname === "/supplier/products") return "products";
+    if (location.pathname === "/supplier/invites") return "invites";
+    if (location.pathname === "/settings") return "settings";
+    return "overview";
+  }, [location.pathname]);
+
   const [orders, setOrders] = useState<Order[]>([]);
   const [employees, setEmployees] = useState<SystemUser[]>([]);
   const [retailers, setRetailers] = useState<SystemUser[]>([]);
@@ -40,12 +58,40 @@ export const SupplierDashboard = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [paymentFilter, setPaymentFilter] = useState("all");
+  const [retailerFilter, setRetailerFilter] = useState("all");
+  const [fetchedNames, setFetchedNames] = useState<Record<string, string>>({});
+
+  // Fetch missing names (Retailers and Employees)
+  useEffect(() => {
+    const missingRetailerIds = orders
+      .filter(o => !!o.retailerId && !o.retailerName && !retailers.find(r => r.uid === o.retailerId) && !fetchedNames[o.retailerId!])
+      .map(o => o.retailerId as string);
+    
+    const missingEmployeeIds = orders
+      .filter(o => !!o.employeeId && !o.employeeName && !employees.find(e => e.uid === o.employeeId) && !fetchedNames[o.employeeId!])
+      .map(o => o.employeeId as string);
+
+    const uniqueMissing = Array.from(new Set([...missingRetailerIds, ...missingEmployeeIds])) as string[];
+
+    if (uniqueMissing.length > 0) {
+      uniqueMissing.forEach((id: string) => {
+        // Use a placeholder
+        setFetchedNames(prev => ({ ...prev, [id]: `User ${id.slice(-4).toUpperCase()}` }));
+        api.get(`/auth/resolve/${id}`)
+          .then(res => {
+            const result = res.data.data;
+            if (result && result.name) setFetchedNames(prev => ({ ...prev, [id]: result.name }));
+          })
+          .catch(err => console.error("Error fetching name for:", id, err));
+      });
+    }
+  }, [orders, retailers, employees]);
 
   // Data Fetching
   useEffect(() => {
     if (!user || !activeOrg) return;
 
-    const ordersQuery = query(collection(db, "orders"), where("organizationId", "==", activeOrg.id));
+    const ordersQuery = query(collection(db, "orders"), where("supplierId", "==", activeOrg.id));
     const unsubscribeOrders = onSnapshot(ordersQuery, (snapshot) => {
       const uniqueOrders = new Map<string, Order>();
       snapshot.docs.forEach(doc => {
@@ -53,26 +99,50 @@ export const SupplierDashboard = () => {
       });
       setOrders(Array.from(uniqueOrders.values()));
     }, (error) => {
-       console.error("Orders listener error:", error);
-       toast.error("Security sync failed. Check permissions.");
+       handleFirestoreError(error, OperationType.GET, "orders");
     });
 
     const memsQuery = query(collection(db, "memberships"), where("organizationId", "==", activeOrg.id));
     const unsubscribeMems = onSnapshot(memsQuery, async (snapshot) => {
+      const userIds = Array.from(new Set(snapshot.docs.map(d => d.data().userId)));
+      
+      if (userIds.length === 0) {
+        setRetailers([]);
+        setEmployees([]);
+        return;
+      }
+
+      // Fetch all users in chunks of 30 (Firestore 'in' query limit)
+      const usersMap = new Map<string, SystemUser>();
+      const chunks = [];
+      for (let i = 0; i < userIds.length; i += 30) {
+        chunks.push(userIds.slice(i, i + 30));
+      }
+
+      for (const chunk of chunks) {
+        const usersQuery = query(collection(db, "users"), where("__name__", "in", chunk));
+        const userSnaps = await getDocs(usersQuery);
+        userSnaps.forEach(u => {
+          usersMap.set(u.id, { uid: u.id, ...u.data() } as SystemUser);
+        });
+      }
+
       const emps: SystemUser[] = [];
       const rets: SystemUser[] = [];
       
-      for (const memDoc of snapshot.docs) {
+      snapshot.docs.forEach(memDoc => {
         const mem = memDoc.data();
-        const userSnap = await getDoc(doc(db, "users", mem.userId));
-        if (userSnap.exists()) {
-          const userData = { uid: userSnap.id, ...userSnap.data() } as SystemUser;
+        const userData = usersMap.get(mem.userId);
+        if (userData) {
           if (mem.role === "employee" && !emps.find(e => e.uid === userData.uid)) emps.push(userData);
           if (mem.role === "retailer" && !rets.find(r => r.uid === userData.uid)) rets.push(userData);
         }
-      }
+      });
+
       setEmployees(emps);
       setRetailers(rets);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, "memberships");
     });
 
     const invitesQuery = query(collection(db, "invites"), where("organizationId", "==", activeOrg.id));
@@ -97,28 +167,95 @@ export const SupplierDashboard = () => {
     const collected = orders.reduce((acc, curr) => acc + (curr.amount_collected || 0), 0);
     
     // Top Retailers
-    const retailerMap = new Map<string, { name: string, revenue: number }>();
+    const retailerMap = new Map<string, { name: string, revenue: number, orderCount: number }>();
     orders.forEach(o => {
-      const current = retailerMap.get(o.retailerId) || { name: o.retailerName, revenue: 0 };
-      retailerMap.set(o.retailerId, { ...current, revenue: current.revenue + (o.totalAmount || 0) });
+      const current = retailerMap.get(o.retailerId) || { name: o.retailerName, revenue: 0, orderCount: 0 };
+      retailerMap.set(o.retailerId, { 
+        ...current, 
+        revenue: current.revenue + (o.totalAmount || 0),
+        orderCount: current.orderCount + 1
+      });
     });
     const topRetailers = Array.from(retailerMap.values())
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 5);
 
     // Employee Performance
-    const employeeMap = new Map<string, { name: string, deliveries: number, collected: number }>();
+    const employeeMap = new Map<string, { name: string, deliveries: number, collected: number, avgTime?: number }>();
     orders.forEach(o => {
       if (!o.employeeId) return;
       const empName = employees.find(e => e.uid === o.employeeId)?.name || "Agent";
-      const current = employeeMap.get(o.employeeId) || { name: empName, deliveries: 0, collected: 0 };
+      const current = employeeMap.get(o.employeeId) || { name: empName, deliveries: 0, collected: 0, avgTime: undefined as number | undefined };
+      
+      let deliveryTimeUpdate = {};
+      if (o.status === 'delivered' && o.delivered_at && o.createdAt) {
+          const created = o.createdAt.toDate().getTime();
+          const delivered = new Date(o.delivered_at).getTime();
+          const hours = (delivered - created) / (1000 * 60 * 60);
+          deliveryTimeUpdate = { 
+            avgTime: current.avgTime !== undefined ? (current.avgTime + hours) / 2 : hours 
+          };
+      }
+
       employeeMap.set(o.employeeId, {
         ...current,
         deliveries: current.deliveries + (o.status === 'delivered' ? 1 : 0),
-        collected: current.collected + (o.amount_collected || 0)
+        collected: current.collected + (o.amount_collected || 0),
+        ...deliveryTimeUpdate
       });
     });
     const employeePerformance = Array.from(employeeMap.values()).sort((a, b) => b.collected - a.collected);
+
+    // Trend Data (Last 7 Days)
+    const days = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+    const now = new Date();
+    const trendMap = new Map<string, number>();
+    
+    // Initialize last 7 days
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(now.getDate() - i);
+      trendMap.set(days[d.getDay()], 0);
+    }
+
+    orders.forEach(o => {
+      if (!o.createdAt) return;
+      const date = o.createdAt.toDate();
+      const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+      if (diffDays <= 7) {
+        const dayName = days[date.getDay()];
+        if (trendMap.has(dayName)) {
+           trendMap.set(dayName, (trendMap.get(dayName) || 0) + o.totalAmount);
+        }
+      }
+    });
+
+    const trendData = Array.from(trendMap.entries()).map(([name, value]) => ({ name, value }));
+
+    // Product Breakdown
+    const productMap = new Map<string, { name: string, quantity: number, revenue: number }>();
+    orders.forEach(o => {
+      o.items?.forEach(item => {
+        const current = productMap.get(item.name) || { name: item.name, quantity: 0, revenue: 0 };
+        productMap.set(item.name, {
+          name: item.name,
+          quantity: current.quantity + item.quantity,
+          revenue: current.revenue + (item.quantity * item.price)
+        });
+      });
+    });
+    const productPerformance = Array.from(productMap.values())
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 5);
+
+    // Efficiency Calculation
+    const deliveredOrders = orders.filter(o => o.status === 'delivered' && o.delivered_at);
+    const avgDeliveryHours = deliveredOrders.length > 0
+      ? deliveredOrders.reduce((acc, o) => {
+          const hours = (new Date(o.delivered_at!).getTime() - o.createdAt.toDate().getTime()) / (1000 * 60 * 60);
+          return acc + hours;
+        }, 0) / deliveredOrders.length
+      : 0;
 
     return {
       totalOrders: orders.length,
@@ -131,7 +268,10 @@ export const SupplierDashboard = () => {
         credit: orders.filter(o => o.payment_status === "credit").length
       },
       topRetailers,
-      employeePerformance
+      employeePerformance,
+      trendData,
+      productPerformance,
+      avgDeliveryHours
     };
   }, [orders, employees]);
 
@@ -139,14 +279,12 @@ export const SupplierDashboard = () => {
   const handleCreateOrder = async (data: any) => {
     if (!activeOrg || !user) return;
     try {
-      await addDoc(collection(db, "orders"), {
+      await api.post("/orders", {
         ...data,
-        organizationId: activeOrg.id,
-        supplierId: user.uid,
+        supplierId: activeOrg.id,
+        supplierName: activeOrg.name,
         retailerName: retailers.find(r => r.uid === data.retailerId)?.name || "Unknown Shop",
-        status: data.employeeId ? "assigned" : "pending",
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
+        employeeName: employees.find(e => e.uid === data.employeeId)?.name || "",
       });
       setIsNewOrderOpen(false);
       toast.success("Manifest active - Logistics vector initialized.");
@@ -162,39 +300,27 @@ export const SupplierDashboard = () => {
     const formData = new FormData(e.target);
     const email = formData.get("email") as string;
     const role = formData.get("role") as string;
-    const token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-    const expiry = new Date();
-    expiry.setHours(expiry.getHours() + 24);
-
+    
     try {
-      await setDoc(doc(db, "invites", token), {
-        organizationId: activeOrg.id,
-        organizationName: activeOrg.name,
-        email,
-        role,
-        token,
-        status: "pending",
-        expiresAt: Timestamp.fromDate(expiry),
-        invitedBy: user.uid,
-        createdAt: serverTimestamp()
-      });
+      // Create a specific invite service/endpoint would be better, but let's use organization as base for now
+      // Actually, let's create a generic invite endpoint in organization.routes
+      const response = await api.post("/organizations/invite", { email, role });
+      const { token } = response.data.data;
       
-      const link = `${window.location.protocol}//${window.location.host}/?token=${token}`;
+      const link = `${window.location.protocol}//${window.location.host}/invite/${token}`;
       setGeneratedLink(link);
       setIsInviteOpen(false);
       setIsSuccessOpen(true);
       toast.success("Entry key provisioned.");
     } catch (error: any) {
-      toast.error("Link encryption failed.");
+      const errorMsg = error.response?.data?.error?.message || error.response?.data?.message || "Link encryption failed.";
+      toast.error(errorMsg);
     }
   };
 
   const updatePaymentStatus = async (orderId: string, status: string) => {
     try {
-      await updateDoc(doc(db, "orders", orderId), {
-        payment_status: status,
-        updatedAt: serverTimestamp()
-      });
+      await api.patch(`/orders/${orderId}/payment`, { status });
       toast.success("Settlement registry updated.");
     } catch (error) {
       toast.error("Ledger write failed.");
@@ -203,13 +329,12 @@ export const SupplierDashboard = () => {
 
   const assignEmployee = async (orderId: string, employeeId: string) => {
     try {
-      const actualEmployeeId = employeeId === "unassigned" ? null : employeeId;
-      await updateDoc(doc(db, "orders", orderId), {
-        employeeId: actualEmployeeId,
-        status: actualEmployeeId ? "assigned" : "pending",
-        updatedAt: serverTimestamp()
+      const empName = employees.find(e => e.uid === employeeId)?.name || "";
+      await api.patch(`/orders/${orderId}/assign`, { 
+        employeeId: employeeId === "unassigned" ? null : employeeId,
+        employeeName: employeeId === "unassigned" ? "" : empName
       });
-      toast.success(actualEmployeeId ? "Agent initialized on manifest." : "Manifest returned to pending queue.");
+      toast.success(employeeId !== "unassigned" ? "Agent initialized on manifest." : "Manifest returned to pending queue.");
     } catch (error) {
       toast.error("Registry update failed.");
     }
@@ -218,43 +343,47 @@ export const SupplierDashboard = () => {
   const deleteInvite = async (invite: Invite) => {
     if (!confirm("Terminate this entry key?")) return;
     try {
-      await deleteDoc(doc(db, "invites", invite.id || invite.token));
+      await api.delete(`/organizations/invites/${invite.token}`);
       toast.success("Link purged from system.");
-    } catch (error) {
-      toast.error("Purge failure.");
+    } catch (error: any) {
+      const errorMsg = error.response?.data?.error?.message || error.response?.data?.message || "Purge failure.";
+      toast.error(errorMsg);
     }
   };
 
   const filteredOrders = orders.filter(order => {
-    const matchesSearch = order.retailerName.toLowerCase().includes(searchTerm.toLowerCase()) || order.id.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = (order.retailerName || fetchedNames[order.retailerId] || "").toLowerCase().includes(searchTerm.toLowerCase()) || order.id.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === "all" || order.status === statusFilter;
     const matchesPayment = paymentFilter === "all" || order.payment_status === paymentFilter;
-    return matchesSearch && matchesStatus && matchesPayment;
+    const matchesRetailer = retailerFilter === "all" || order.retailerId === retailerFilter;
+    return matchesSearch && matchesStatus && matchesPayment && matchesRetailer;
   });
 
   // Action Buttons for DashboardLayout
   const actions = (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-2 sm:gap-3">
         <Button 
             onClick={() => setIsInviteOpen(true)} 
             variant="outline" 
-            className="rounded-xl h-11 px-6 font-black uppercase text-[10px] tracking-widest border-zinc-200 transition-all hover:bg-zinc-900 hover:text-white"
+            className="rounded-xl h-10 sm:h-11 px-3 sm:px-6 font-black uppercase text-[10px] tracking-widest border-zinc-200 transition-all hover:bg-zinc-900 hover:text-white shrink-0"
         >
-            <UserPlus className="mr-2 h-4 w-4" /> Provision Entry
+            <UserPlus className="sm:mr-2 h-4 w-4" /> 
+            <span className="hidden sm:inline">Provision Entry</span>
+            <span className="inline sm:hidden">Invite</span>
         </Button>
         <Button 
             onClick={() => setIsNewOrderOpen(true)} 
-            className="rounded-xl h-11 px-6 font-black uppercase text-[10px] tracking-widest bg-zinc-900 text-white hover:bg-zinc-800 shadow-xl transition-all hover:scale-[1.02]"
+            className="rounded-xl h-10 sm:h-11 px-3 sm:px-6 font-black uppercase text-[10px] tracking-widest bg-zinc-900 text-white hover:bg-zinc-800 shadow-xl transition-all hover:scale-[1.02] shrink-0"
         >
-            <Plus className="mr-2 h-4 w-4" /> New Manifest
+            <Plus className="sm:mr-2 h-4 w-4" /> 
+            <span className="hidden sm:inline">New Manifest</span>
+            <span className="inline sm:hidden">New</span>
         </Button>
     </div>
   );
 
   return (
     <DashboardLayout
-      activeTab={activeTab}
-      onTabChange={setActiveTab}
       title={activeOrg?.name || "Terminal"}
       subtitle="Supplier Sector Control"
       actions={actions}
@@ -264,12 +393,16 @@ export const SupplierDashboard = () => {
         <SupplierOrders 
             orders={filteredOrders} 
             employees={employees}
+            retailers={retailers}
+            fetchedNames={fetchedNames}
             searchTerm={searchTerm}
             setSearchTerm={setSearchTerm}
             statusFilter={statusFilter}
             setStatusFilter={setStatusFilter}
             paymentFilter={paymentFilter}
             setPaymentFilter={setPaymentFilter}
+            retailerFilter={retailerFilter}
+            setRetailerFilter={setRetailerFilter}
             onOrderSelect={setSelectedOrderDetail}
             onPaymentStatusUpdate={updatePaymentStatus}
             onEmployeeAssign={assignEmployee}
@@ -283,6 +416,7 @@ export const SupplierDashboard = () => {
         />
       )}
       {activeTab === "insights" && <SupplierInsights stats={stats} />}
+      {activeTab === "strategy" && <StrategicTools stats={stats} />}
       {activeTab === "network" && (
         <SupplierNetwork 
             employees={employees} 
@@ -303,7 +437,7 @@ export const SupplierDashboard = () => {
             invites={invites} 
             onInviteOpen={() => setIsInviteOpen(true)}
             onCopyLink={(token) => {
-                const link = `${window.location.protocol}//${window.location.host}/?token=${token}`;
+                const link = `${window.location.protocol}//${window.location.host}/invite/${token}`;
                 navigator.clipboard.writeText(link);
                 toast.success("Key copied to clipboard.");
             }}

@@ -1,8 +1,9 @@
-import React, { createContext, useContext, useEffect, useState, useRef } from "react";
+import React, { createContext, useContext, useEffect, useState } from "react";
 import { onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
-import { doc, getDoc, onSnapshot, collection, query, where, setDoc, serverTimestamp } from "firebase/firestore";
-import { auth, db } from "./firebase";
+import { auth } from "./firebase";
+import api from "@/services/api";
 import { SystemUser, Membership, Organization, UserRole } from "@/types";
+import { toast } from "sonner";
 
 interface AuthContextType {
   user: SystemUser | null;
@@ -10,8 +11,11 @@ interface AuthContextType {
   memberships: Membership[];
   activeOrg: Organization | null;
   activeRole: UserRole | null;
+  organizations: Record<string, Organization>;
   loading: boolean;
   switchOrg: (orgId: string) => void;
+  refreshContext: () => Promise<void>;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -22,6 +26,8 @@ const AuthContext = createContext<AuthContextType>({
   activeRole: null,
   loading: true,
   switchOrg: () => {},
+  refreshContext: async () => {},
+  logout: async () => {},
 });
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -31,87 +37,46 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [organizations, setOrganizations] = useState<Record<string, Organization>>({});
   const [activeOrgId, setActiveOrgId] = useState<string | null>(localStorage.getItem("activeOrgId"));
   const [loading, setLoading] = useState(true);
-  const orgsUnsubscribeRef = useRef<(() => void) | null>(null);
+
+  const fetchContext = async () => {
+    try {
+      const response = await api.get("/auth/me");
+      const { user: userData, memberships: memsData, organizations: orgsData } = response.data.data;
+      
+      setUser(userData);
+      setMemberships(memsData);
+      
+      const orgMap: Record<string, Organization> = {};
+      orgsData.forEach((org: Organization) => {
+        orgMap[org.id] = org;
+      });
+      setOrganizations(orgMap);
+
+      if (memsData.length > 0) {
+        setActiveOrgId(currentId => {
+          if (!currentId || !memsData.find((m: Membership) => m.organizationId === currentId)) {
+            const newId = memsData[0].organizationId;
+            localStorage.setItem("activeOrgId", newId);
+            return newId;
+          }
+          return currentId;
+        });
+      } else {
+        setActiveOrgId(null);
+      }
+    } catch (error) {
+      console.error("Error fetching user context:", error);
+      // Don't toast on initial load if not logged in
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    let unsubscribeUser: (() => void) | null = null;
-    let unsubscribeMems: (() => void) | null = null;
-
     const unsubscribeAuth = onAuthStateChanged(auth, async (fUser) => {
       setFirebaseUser(fUser);
-      
-      // Cleanup previous user-specific listeners
-      if (unsubscribeUser) unsubscribeUser();
-      if (unsubscribeMems) unsubscribeMems();
-      if (orgsUnsubscribeRef.current) {
-        orgsUnsubscribeRef.current();
-        orgsUnsubscribeRef.current = null;
-      }
-
       if (fUser) {
-        // 1. Listen to global user profile
-        const userRef = doc(db, "users", fUser.uid);
-        unsubscribeUser = onSnapshot(userRef, (docSnap) => {
-          if (docSnap.exists()) {
-            setUser({ uid: fUser.uid, ...docSnap.data() } as SystemUser);
-          } else {
-            const newUser = {
-              uid: fUser.uid,
-              email: fUser.email!,
-              name: fUser.displayName || fUser.email!.split('@')[0],
-              createdAt: new Date().toISOString()
-            };
-            setDoc(userRef, newUser).then(() => setUser(newUser));
-          }
-        }, (error) => console.error("User profile listener error:", error));
-
-        // 2. Listen to memberships
-        const memsQuery = query(collection(db, "memberships"), where("userId", "==", fUser.uid));
-        unsubscribeMems = onSnapshot(memsQuery, (snapshot) => {
-          const memsMap = new Map<string, Membership>();
-          snapshot.docs.forEach(d => {
-            memsMap.set(d.id, { id: d.id, ...d.data() } as Membership);
-          });
-          const mems = Array.from(memsMap.values());
-          setMemberships(mems);
-
-          const orgIds = mems.map(m => m.organizationId);
-          if (orgIds.length > 0) {
-            if (orgsUnsubscribeRef.current) orgsUnsubscribeRef.current();
-            
-            const orgsQuery = query(collection(db, "organizations"), where("__name__", "in", orgIds));
-            orgsUnsubscribeRef.current = onSnapshot(orgsQuery, (snapshot) => {
-              const orgsData: Record<string, Organization> = {};
-              snapshot.forEach(doc => {
-                orgsData[doc.id] = { id: doc.id, ...doc.data() } as Organization;
-              });
-              setOrganizations(orgsData);
-            }, (error) => console.error("Organizations list listener error:", error));
-          } else {
-            if (orgsUnsubscribeRef.current) {
-              orgsUnsubscribeRef.current();
-              orgsUnsubscribeRef.current = null;
-            }
-            setOrganizations({});
-          }
-
-          if (mems.length > 0) {
-            setActiveOrgId(currentId => {
-              if (!currentId || !mems.find(m => m.organizationId === currentId)) {
-                const newId = mems[0].organizationId;
-                localStorage.setItem("activeOrgId", newId);
-                return newId;
-              }
-              return currentId;
-            });
-          } else {
-            setActiveOrgId(null);
-          }
-          setLoading(false);
-        }, (error) => {
-          console.error("Memberships listener error:", error);
-          setLoading(false);
-        });
+        await fetchContext();
       } else {
         setUser(null);
         setMemberships([]);
@@ -121,12 +86,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     });
 
-    return () => {
-      unsubscribeAuth();
-      if (unsubscribeUser) unsubscribeUser();
-      if (unsubscribeMems) unsubscribeMems();
-      if (orgsUnsubscribeRef.current) orgsUnsubscribeRef.current();
-    };
+    return () => unsubscribeAuth();
   }, []);
 
   const switchOrg = (orgId: string) => {
@@ -134,19 +94,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem("activeOrgId", orgId);
   };
 
+  const refreshContext = async () => {
+    setLoading(true);
+    await fetchContext();
+  };
+
+  const logout = async () => {
+    try {
+      await auth.signOut();
+      localStorage.removeItem("activeOrgId");
+      toast.success("Logged out successfully");
+    } catch (error) {
+      console.error("Error logging out:", error);
+      toast.error("Failed to log out");
+    }
+  };
+
   const activeMembership = memberships.find(m => m.organizationId === activeOrgId);
   const activeOrg = activeOrgId ? organizations[activeOrgId] || null : null;
 
+  const value = React.useMemo(() => ({ 
+    user, 
+    firebaseUser, 
+    memberships, 
+    activeOrg, 
+    activeRole: activeMembership?.role || null,
+    activeOrgId,
+    organizations,
+    loading, 
+    switchOrg,
+    refreshContext,
+    logout
+  }), [user, firebaseUser, memberships, activeOrg, organizations, loading, activeMembership?.role, activeOrgId, logout]);
+
   return (
-    <AuthContext.Provider value={{ 
-      user, 
-      firebaseUser, 
-      memberships, 
-      activeOrg, 
-      activeRole: activeMembership?.role || null,
-      loading, 
-      switchOrg 
-    }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

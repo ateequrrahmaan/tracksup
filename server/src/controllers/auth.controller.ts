@@ -1,23 +1,47 @@
-import { Request, Response } from "express";
-// import { auth } from "../services/firebase.service.js";
+import { Response } from "express";
+import { AuthRequest } from "../middlewares/auth.middleware.js";
+import * as authService from "../services/auth.service.js";
+import { sendSuccess, sendError } from "../utils/response.js";
 
-export const login = async (req: Request, res: Response) => {
+export const getMe = async (req: AuthRequest, res: Response) => {
   try {
-    const { email, password } = req.body;
-    // Handle login via Firebase Client SDK normally, 
-    // but here we might bridge some server-side session if needed.
-    res.json({ message: "Login successful", token: "mock-jwt-token" });
+    const context = await authService.getUserContext(req.user.uid);
+    sendSuccess(res, context);
   } catch (error: any) {
-    res.status(401).json({ message: error.message });
+    console.error("getUserContext error:", error);
+    sendError(res, error.message);
   }
 };
 
-export const register = async (req: Request, res: Response) => {
+export const updateMe = async (req: AuthRequest, res: Response) => {
   try {
-    const { email, password, name } = req.body;
-    // Logic to create user in Firebase and initial organization
-    res.status(201).json({ message: "User registered" });
+    const updated = await authService.updateUser(req.user.uid, req.body);
+    sendSuccess(res, updated);
   } catch (error: any) {
-    res.status(400).json({ message: error.message });
+    sendError(res, error.message);
+  }
+};
+
+export const resolveName = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const firestore = (await import("../services/firebase.service.js")).db();
+    if (!firestore) throw new Error("Firestore not initialized");
+
+    // 1. Try organization
+    const orgDoc = await firestore.collection("organizations").doc(id).get();
+    if (orgDoc.exists) {
+      return sendSuccess(res, { id: orgDoc.id, name: orgDoc.data()?.name, type: "organization" });
+    }
+
+    // 2. Try user
+    const userDoc = await firestore.collection("users").doc(id).get();
+    if (userDoc.exists) {
+      return sendSuccess(res, { id: userDoc.id, name: userDoc.data()?.name, type: "user" });
+    }
+
+    sendError(res, "Identity not found", 404);
+  } catch (error: any) {
+    sendError(res, error.message);
   }
 };

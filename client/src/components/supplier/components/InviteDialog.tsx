@@ -17,10 +17,13 @@ export const InviteDialog: React.FC<InviteDialogProps> = ({
   onOpenChange, 
   onSubmit 
 }) => {
+  const [role, setRole] = React.useState("employee");
+
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="rounded-[2.5rem] p-10 border-none shadow-2xl sm:max-w-[450px]">
         <form onSubmit={onSubmit}>
+          <input type="hidden" name="role" value={role} />
           <DialogHeader>
             <div className="h-14 w-14 rounded-2xl bg-zinc-100 flex items-center justify-center text-zinc-900 mb-6 mx-auto">
                <UserPlus className="h-7 w-7" />
@@ -47,7 +50,7 @@ export const InviteDialog: React.FC<InviteDialogProps> = ({
             </div>
             <div className="space-y-2">
               <Label htmlFor="role" className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-4">Operational Role</Label>
-              <Select name="role" defaultValue="employee">
+              <Select value={role} onValueChange={setRole}>
                 <SelectTrigger className="h-14 rounded-2xl border-none bg-zinc-50 px-6 font-bold shadow-none">
                   <SelectValue placeholder="Select role" />
                 </SelectTrigger>

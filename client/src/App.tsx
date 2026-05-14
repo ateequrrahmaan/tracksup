@@ -12,65 +12,86 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { RetailerDetail } from "./components/supplier/RetailerDetail";
 import { EmployeeDetail } from "./components/supplier/EmployeeDetail";
-
 import { LandingPage } from "./components/landing/LandingPage";
+import { ProtectedRoute } from "./components/shared/ProtectedRoute";
+import { DashboardLayout } from "./components/shared/DashboardLayout";
+import { SettingsView } from "./components/shared/SettingsView";
+
+const SettingsViewWrapper = () => (
+  <DashboardLayout title="System Settings" subtitle="Operative Configuration">
+    <SettingsView />
+  </DashboardLayout>
+);
 
 const AppContent = () => {
   const { user, loading, activeRole, memberships } = useAuth();
-  const urlParams = new URLSearchParams(window.location.search);
-  const isInviteFlow = urlParams.has("token");
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center p-8">
-        <div className="space-y-4 w-full max-w-4xl">
-          <Skeleton className="h-12 w-1/4" />
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Skeleton className="h-32" />
-            <Skeleton className="h-32" />
-            <Skeleton className="h-32" />
-          </div>
-          <Skeleton className="h-[400px] w-full" />
+      <div className="flex flex-col items-center justify-center min-h-screen space-y-4 bg-zinc-50">
+        <div className="h-1.5 w-48 bg-zinc-200 rounded-full overflow-hidden">
+          <div className="h-full bg-zinc-900 animate-[loading_1.5s_ease-in-out_infinite] w-1/3" />
         </div>
+        <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 animate-pulse italic">Synchronizing Buffer...</p>
       </div>
     );
   }
 
-  // Invitation flow handles its own login/signup state via URL param
-  if (isInviteFlow) {
-    if (!user && urlParams.get("auth") === "true") {
-      return <AuthForms />;
+  // Root redirect logic based on auth state
+  const getRootRedirect = () => {
+    if (!user) return <LandingPage />;
+    if (memberships.length === 0) return <Navigate to="/onboarding" replace />;
+    
+    switch (activeRole) {
+      case "supplier": return <Navigate to="/supplier" replace />;
+      case "employee": return <Navigate to="/employee" replace />;
+      case "retailer": return <Navigate to="/retailer" replace />;
+      default: return (
+        <div className="flex h-screen items-center justify-center">
+          <div className="text-center space-y-4">
+            <p className="text-zinc-500">Your account is waiting for approval.</p>
+            <button onClick={() => window.location.reload()} className="text-primary underline">Refresh</button>
+          </div>
+        </div>
+      );
     }
-    return <InvitePage />;
-  }
+  };
 
   return (
     <Routes>
-      <Route path="/" element={
-        !user ? <LandingPage /> :
-        memberships.length === 0 ? <Onboarding /> :
-        activeRole === "supplier" ? <SupplierDashboard /> :
-        activeRole === "employee" ? <EmployeeDashboard /> :
-        activeRole === "retailer" ? <RetailerDashboard /> :
-        (
-          <div className="flex h-screen items-center justify-center">
-            <div className="text-center space-y-4">
-              <p className="text-zinc-500">Your account is waiting for approval.</p>
-              <button onClick={() => window.location.reload()} className="text-primary underline">Refresh</button>
-            </div>
-          </div>
-        )
-      } />
-      
+      {/* Public Routes */}
+      <Route path="/" element={getRootRedirect()} />
       <Route path="/auth" element={user ? <Navigate to="/" replace /> : <AuthForms />} />
-      
-      {activeRole === "supplier" && user && (
-        <>
-          <Route path="/dashboard/retailers/:id" element={<RetailerDetail />} />
-          <Route path="/dashboard/employees/:id" element={<EmployeeDetail />} />
-        </>
-      )}
+      <Route path="/invite/:token" element={<InvitePage />} />
 
+      {/* Protected Routes - General */}
+      <Route element={<ProtectedRoute />}>
+        <Route path="/onboarding" element={memberships.length > 0 ? <Navigate to="/" replace /> : <Onboarding />} />
+      </Route>
+
+      {/* Protected Routes - Supplier */}
+      <Route element={<ProtectedRoute allowedRoles={["supplier"]} />}>
+        <Route path="/supplier/*" element={<SupplierDashboard />} />
+        {/* Detail pages can remain as siblings or sub-routes */}
+        <Route path="/supplier/retailers/:id" element={<RetailerDetail />} />
+        <Route path="/supplier/employees/:id" element={<EmployeeDetail />} />
+      </Route>
+
+      {/* Protected Routes - Employee */}
+      <Route element={<ProtectedRoute allowedRoles={["employee"]} />}>
+        <Route path="/employee/*" element={<EmployeeDashboard />} />
+      </Route>
+
+      {/* Protected Routes - Retailer */}
+      <Route element={<ProtectedRoute allowedRoles={["retailer"]} />}>
+        <Route path="/retailer/*" element={<RetailerDashboard />} />
+      </Route>
+
+      <Route element={<ProtectedRoute />}>
+        <Route path="/settings" element={<SettingsViewWrapper />} />
+      </Route>
+      
+      {/* Fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

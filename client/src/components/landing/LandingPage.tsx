@@ -227,12 +227,12 @@ export const LandingPage = () => {
       <div className={`fixed inset-0 pointer-events-none z-[70] bg-[url('https://grainy-gradients.vercel.app/noise.svg')] ${currentTheme.noise}`} />
 
       {/* Navigation */}
-      <nav className={`fixed top-0 left-0 right-0 h-20 backdrop-blur-md border-b z-[80] flex items-center justify-between px-6 md:px-16 lg:px-24 transition-colors duration-700 ${currentTheme.nav}`}>
-        <div className="flex items-center gap-3 relative z-[90]">
-          <div className={`h-10 w-10 rounded-xl flex items-center justify-center text-white shadow-lg rotate-3 transition-transform hover:rotate-0 ${theme === 'light' ? 'bg-zinc-900' : 'bg-emerald-500'}`}>
-            <Package2 className="h-6 w-6" />
+      <nav className={`fixed top-0 left-0 right-0 h-16 md:h-20 backdrop-blur-md border-b z-[101] flex items-center justify-between px-6 md:px-16 lg:px-24 transition-colors duration-700 ${currentTheme.nav}`}>
+        <div className="flex items-center gap-2 md:gap-3">
+          <div className={`h-8 w-8 md:h-10 md:w-10 rounded-lg md:rounded-xl flex items-center justify-center text-white shadow-lg rotate-3 transition-transform hover:rotate-0 ${theme === 'light' ? 'bg-zinc-900' : 'bg-emerald-500'}`}>
+            <Package2 className="h-4 w-4 md:h-6 md:w-6" />
           </div>
-          <span className="text-2xl font-black italic tracking-tighter uppercase sm:block">TracksUp</span>
+          <span className={`text-sm md:text-xl font-black uppercase tracking-tighter italic ${theme === 'cyber' ? 'text-emerald-500' : 'text-zinc-900'}`}>TracksUp</span>
         </div>
 
         <div className="hidden lg:flex items-center gap-6">
@@ -270,50 +270,50 @@ export const LandingPage = () => {
           ))}
         </div>
         
-        <div className="flex items-center gap-4 relative z-[90]">
+        <div className="flex items-center gap-3 md:gap-4 relative z-[100]">
           <Link to="/auth" className="hidden lg:block">
             <span className={`text-[10px] font-black uppercase tracking-widest transition-colors cursor-pointer mr-6 italic ${theme === 'cyber' ? 'text-emerald-600 hover:text-emerald-400' : 'text-zinc-500 hover:text-zinc-900'}`}>
               Sign In
             </span>
           </Link>
-          <Link to="/auth" className="hidden sm:block">
-            <Button className={`rounded-xl h-11 px-8 font-black uppercase italic tracking-widest shadow-xl transition-all hover:scale-105 active:scale-95 ${currentTheme.button}`}>
+          <Link to="/auth" className="hidden md:block lg:hidden">
+            <Button className={`rounded-lg h-9 px-5 text-[10px] font-black uppercase italic tracking-widest transition-all ${currentTheme.button}`}>
               Log In
             </Button>
           </Link>
           
           <button 
             onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className={`lg:hidden p-2 rounded-xl transition-colors ${currentTheme.muted}`}
+            className={`lg:hidden p-2 md:p-2.5 rounded-lg md:rounded-xl transition-all ${currentTheme.muted} relative z-[102]`}
           >
-            {isMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+            {isMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
         </div>
 
         {/* Mobile Menu */}
         <motion.div 
           initial={false}
-          animate={isMenuOpen ? { x: 0 } : { x: "100%" }}
+          animate={isMenuOpen ? { x: 0, opacity: 1 } : { x: "100%", opacity: 0 }}
           transition={{ type: "spring", damping: 30, stiffness: 300 }}
-          className={`fixed inset-0 lg:hidden pt-24 px-6 md:px-16 z-[75] flex flex-col transition-colors duration-700 ${currentTheme.bg}`}
+          className={`fixed inset-0 lg:hidden z-[90] flex flex-col p-6 pt-32 pb-10 overflow-y-auto transition-colors duration-700 ${currentTheme.bg}`}
         >
-          <div className="space-y-10 flex flex-col items-center text-center">
+          <div className="space-y-8 flex flex-col items-center text-center">
             {["Network", "Protocols", "Pricing", "Testimonials"].map((item) => (
               <a 
                 key={item} 
                 href={`#${item.toLowerCase()}`} 
                 onClick={() => setIsMenuOpen(false)}
-                className={`text-4xl font-black uppercase italic tracking-tighter transition-colors ${theme === 'cyber' ? 'text-emerald-500 hover:text-emerald-300' : 'text-zinc-900 hover:text-zinc-500'}`}
+                className={`text-3xl md:text-4xl font-black uppercase italic tracking-tighter transition-colors ${theme === 'cyber' ? 'text-emerald-500 hover:text-emerald-300' : 'text-zinc-900 hover:text-zinc-500'}`}
               >
                 {item}
               </a>
             ))}
             
-            <div className={`w-full h-[1px] ${theme === 'cyber' ? 'bg-emerald-500/10' : 'bg-zinc-100'}`} />
+            <div className={`w-full h-[1px] my-4 ${theme === 'cyber' ? 'bg-emerald-500/10' : 'bg-zinc-100'}`} />
             
-            <div className="space-y-6 w-full">
+            <div className="space-y-6 w-full max-w-sm">
               <p className="text-[10px] font-black uppercase tracking-[0.5em] text-zinc-500 italic">Select Theme</p>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-3">
                 {[
                   { id: 'light', icon: Sun, label: 'Standard' },
                   { id: 'dark', icon: Moon, label: 'Stealth' },
@@ -323,18 +323,18 @@ export const LandingPage = () => {
                   <button 
                     key={t.id}
                     onClick={() => setTheme(t.id as any)}
-                    className={`flex flex-col items-center gap-2 p-4 rounded-2xl border transition-all ${theme === t.id ? (theme === 'cyber' ? 'bg-emerald-500 border-emerald-500 text-black' : 'bg-zinc-900 border-zinc-900 text-white') : (theme === 'cyber' ? 'border-emerald-500/20 text-emerald-500' : 'border-zinc-300 text-zinc-600')}`}
+                    className={`flex flex-col items-center gap-2 py-3 px-4 rounded-2xl border transition-all ${theme === t.id ? (theme === 'cyber' ? 'bg-emerald-500 border-emerald-500 text-black' : 'bg-zinc-900 border-zinc-900 text-white shadow-xl') : (theme === 'cyber' ? 'border-emerald-500/20 text-emerald-500' : 'border-zinc-200 text-zinc-600 hover:bg-zinc-50')}`}
                   >
-                    <t.icon className="h-5 w-5" />
-                    <span className="text-[10px] font-black uppercase">{t.label}</span>
+                    <t.icon className="h-4 w-4" />
+                    <span className="text-[8px] font-black uppercase tracking-widest">{t.label}</span>
                   </button>
                 ))}
               </div>
             </div>
 
-            <div className="pt-8 w-full">
-              <Link to="/auth" onClick={() => setIsMenuOpen(false)}>
-                <Button className={`w-full h-20 rounded-3xl font-black uppercase italic tracking-widest text-xl ${currentTheme.button}`}>
+            <div className="pt-6 w-full max-w-sm">
+              <Link to="/auth" onClick={() => setIsMenuOpen(false)} className="w-full">
+                <Button className={`w-full h-16 rounded-2xl font-black uppercase italic tracking-widest text-lg ${currentTheme.button}`}>
                   Get Started
                 </Button>
               </Link>
@@ -361,12 +361,15 @@ export const LandingPage = () => {
               </motion.div>
               
               <div className="relative mb-10 md:mb-12">
-                <motion.h1 variants={itemVariants} className="text-5xl md:text-8xl lg:text-7xl xl:text-[9rem] font-black uppercase italic tracking-tighter leading-[0.85] relative z-20 transition-colors">
+                <motion.h1 
+                  variants={itemVariants} 
+                  className="text-4xl sm:text-5xl md:text-8xl lg:text-7xl xl:text-[9rem] font-black uppercase italic tracking-tighter leading-[0.85] relative z-20 transition-colors"
+                >
                   Supply <br />
                   Chain <br />
                   <span className={`transition-colors ${theme === 'light' ? 'text-zinc-300/80' : theme === 'cyber' ? 'text-emerald-800/40' : 'text-zinc-800/50'}`}>Simplified.</span>
                 </motion.h1>
-                <div className={`absolute -top-6 -left-6 md:-top-14 md:-left-14 text-7xl md:text-[13rem] font-black select-none -z-10 italic tracking-tighter leading-none pointer-events-none transition-colors ${theme === 'light' ? 'text-zinc-100/50' : theme === 'cyber' ? 'text-emerald-950/30' : 'text-zinc-900/40'}`}>
+                <div className={`absolute -top-10 -left-2 md:-top-14 md:-left-14 text-6xl md:text-[13rem] font-black select-none -z-10 italic tracking-tighter leading-none pointer-events-none transition-colors ${theme === 'light' ? 'text-zinc-100/50' : theme === 'cyber' ? 'text-emerald-950/30' : 'text-zinc-900/40'}`}>
                   TRACK
                 </div>
               </div>
@@ -560,7 +563,7 @@ export const LandingPage = () => {
 
         {/* Testimonials Protocol */}
         <section id="testimonials" className={`py-40 px-6 md:px-16 lg:px-24 relative overflow-hidden transition-colors duration-700 ${currentTheme.muted}`}>
-           <div className={`absolute top-0 right-0 p-12 opacity-[0.03] italic font-black text-[20rem] uppercase tracking-tighter -rotate-90 pointer-events-none select-none ${currentTheme.text}`}>
+           <div className={`absolute top-0 right-0 p-8 md:p-12 opacity-[0.03] italic font-black text-[10rem] md:text-[20rem] uppercase tracking-tighter -rotate-90 pointer-events-none select-none ${currentTheme.text}`}>
             TRUST
           </div>
            <div className="max-w-7xl mx-auto relative z-10">

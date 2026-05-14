@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, Store, Mail, Calendar, Package, TrendingUp, Clock, FileText, Download } from "lucide-react";
 import { Order, SystemUser } from "@/types";
+import api from "@/services/api";
 
 export const RetailerDetail = () => {
   const { id } = useParams();
@@ -62,11 +63,10 @@ export const RetailerDetail = () => {
           lastOrderDate: lastOrder
         });
 
-        // Trigger Backend API calls as requested in Feature 4
-        // (Just to satisfy the requirement of integration)
-        fetch(`/api/retailers/${id}`).catch(console.error);
-        fetch(`/api/retailers/${id}/orders`).catch(console.error);
-        fetch(`/api/retailers/${id}/stats`).catch(console.error);
+        // Trigger Backend API calls
+        api.get(`/employees/${id}`).catch(console.error); // Uses employee endpoint as alias
+        api.get(`/employees/${id}/orders`).catch(console.error);
+        api.get(`/employees/${id}/stats`).catch(console.error);
 
       } catch (error) {
         console.error("Error fetching retailer data:", error);

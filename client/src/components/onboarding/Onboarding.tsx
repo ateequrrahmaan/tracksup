@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { doc, setDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { signOut } from "firebase/auth";
 import { db, auth } from "@/lib/firebase";
+import api from "@/services/api";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,14 +11,20 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Package2, Building2, Store, Truck, ArrowRight, ShieldCheck, Plus, Search, Loader2, LogOut } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { Navigate } from "react-router-dom";
 
 type OnboardingStep = "role-selection" | "org-setup" | "finalizing";
 
 export const Onboarding = () => {
-  const { user } = useAuth();
+  const { user, memberships, refreshContext } = useAuth();
   const [step, setStep] = useState<OnboardingStep>("role-selection");
   const [selectedRole, setSelectedRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  
+  // Redirect if already onboarded
+  if (memberships.length > 0) {
+    return <Navigate to="/" replace />;
+  }
   
   // Org details
   const [orgName, setOrgName] = useState("");
@@ -63,40 +70,36 @@ export const Onboarding = () => {
     
     setLoading(true);
     try {
-      // 1. Create Organization (if not employee, or maybe even for employee joining one)
-      let organizationId = "global";
-      
       if (selectedRole !== "employee") {
-        const orgRef = await addDoc(collection(db, "organizations"), {
+        // Use backend API to create organization and membership atomically
+        await api.post("/organizations", {
           name: orgName,
           description: orgDescription,
           type: selectedRole,
-          ownerId: user?.uid,
-          createdAt: serverTimestamp(),
           settings: {
             theme: "neutral",
             currency: "USD"
           }
         });
-        organizationId = orgRef.id;
+      } else {
+        // Employees join existing orgs via invite, but for now we might need 
+        // to create a "placeholder" or just let them wait for an invite.
+        // If they chose "employee", they are basically awaiting an invite.
+        // We can create a user record or just let them stay in onboarding until invited.
+        // Actually, the app logic seems to expect users to HAVE a role.
+        // For employees, we'll just skip org creation.
+        toast.info("Account set as Employee. You'll need an invite link to join an organization.");
       }
 
-      // 2. Create Membership
-      await setDoc(doc(db, "memberships", `${user?.uid}_${organizationId}`), {
-        userId: user?.uid,
-        organizationId: organizationId,
-        role: selectedRole,
-        status: "active",
-        joinedAt: serverTimestamp()
-      });
-
       toast.success("Setup complete!");
-      // Navigation will be handled by App.tsx observing membership change
-    } catch (error) {
+      // Refresh context via the function from useAuth
+      await refreshContext();
+    } catch (error: any) {
       console.error(error);
-      toast.error("Failed to complete setup");
+      toast.error(error.response?.data?.message || "Failed to complete setup");
     } finally {
       setLoading(false);
+      window.location.reload(); // Simple way to trigger context refresh for now
     }
   };
 
