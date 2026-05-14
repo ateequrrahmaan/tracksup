@@ -2,7 +2,12 @@ import express, { Response, NextFunction } from "express";
 import { auth as getAdminAuth, db } from "../services/firebase.service.js";
 import { sendError } from "../utils/response.js";
 
-export interface AuthRequest<P = any, ResBody = any, ReqBody = any, ReqQuery = any> extends express.Request<P, ResBody, ReqBody, ReqQuery> {
+export interface AuthRequest<
+  P = any,
+  ResBody = any,
+  ReqBody = any,
+  ReqQuery = any
+> extends express.Request<P, ResBody, ReqBody, ReqQuery> {
   user?: any;
   orgId?: string;
 }

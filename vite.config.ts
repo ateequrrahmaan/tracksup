@@ -4,11 +4,11 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { defineConfig, loadEnv } from 'vite';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
+  
   return {
     root: 'client',
     plugins: [react(), tailwindcss()],
@@ -21,15 +21,13 @@ export default defineConfig(({ mode }) => {
       },
     },
     build: {
-      outDir: '../dist',
+      outDir: '../dist/client',
       emptyOutDir: true,
     },
     server: {
-      // HMR is disabled in AI Studio via DISABLE_HMR env var.
       hmr: process.env.DISABLE_HMR !== 'true',
-      fs: {
-        allow: ['..'],
-      },
+      port: 3000,
+      host: '0.0.0.0',
     },
   };
 });

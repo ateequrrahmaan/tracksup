@@ -4,16 +4,23 @@ import { getFirestore } from "firebase/firestore";
 
 import localConfig from "../../../firebase-applet-config.json";
 
-// Prefer env variables for production, fallback to local config
+// Prefer env variables for production, fallback to local config if not placeholders
+const isPlaceholder = (val: string) => !val || val.startsWith("PLACEHOLDER_");
+
+const getCfg = (envKey: keyof ImportMetaEnv, localVal: string) => {
+  const envVal = import.meta.env[envKey] as string;
+  return (!isPlaceholder(envVal)) ? envVal : ((!isPlaceholder(localVal)) ? localVal : "");
+};
+
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || localConfig.apiKey,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || localConfig.authDomain,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || localConfig.projectId,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || localConfig.storageBucket,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || localConfig.messagingSenderId,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || localConfig.appId,
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || localConfig.measurementId,
-  firestoreDatabaseId: import.meta.env.VITE_FIREBASE_DATABASE_ID || localConfig.firestoreDatabaseId || '(default)'
+  apiKey: getCfg("VITE_FIREBASE_API_KEY", localConfig.apiKey),
+  authDomain: getCfg("VITE_FIREBASE_AUTH_DOMAIN", localConfig.authDomain),
+  projectId: getCfg("VITE_FIREBASE_PROJECT_ID", localConfig.projectId),
+  storageBucket: getCfg("VITE_FIREBASE_STORAGE_BUCKET", localConfig.storageBucket),
+  messagingSenderId: getCfg("VITE_FIREBASE_MESSAGING_SENDER_ID", localConfig.messagingSenderId),
+  appId: getCfg("VITE_FIREBASE_APP_ID", localConfig.appId),
+  measurementId: getCfg("VITE_FIREBASE_MEASUREMENT_ID" as any, localConfig.measurementId),
+  firestoreDatabaseId: getCfg("VITE_FIREBASE_DATABASE_ID" as any, localConfig.firestoreDatabaseId) || '(default)'
 };
 
 const app = initializeApp(firebaseConfig);
