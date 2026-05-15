@@ -13,8 +13,8 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Load environment variables from root or local
-config({ path: path.join(__dirname, "../.env") });
+// Load environment variables
+config(); 
 
 // API Routes
 import authRoutes from "./src/routes/auth.routes.js";
@@ -61,7 +61,14 @@ async function startServer() {
 
   // Health Check
   app.get("/api/health", (req: express.Request, res: express.Response) => {
-    res.json({ status: "ok", timestamp: new Date().toISOString() });
+    const adminInit = !!getFirebaseAdmin();
+    res.json({ 
+      status: "ok", 
+      timestamp: new Date().toISOString(),
+      services: {
+        firebase: adminInit ? "connected" : "disconnected"
+      }
+    });
   });
 
   // Centralized Error Handler
