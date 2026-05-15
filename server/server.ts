@@ -15,6 +15,7 @@ const __dirname = process.cwd();
 config(); 
 
 // API Routes
+import { getFirebaseAdmin } from "./src/services/firebase.service.js";
 import authRoutes from "./src/routes/auth.routes.js";
 import organizationRoutes from "./src/routes/organization.routes.js";
 import orderRoutes from "./src/routes/order.routes.js";

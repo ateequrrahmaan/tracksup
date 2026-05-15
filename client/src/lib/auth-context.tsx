@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
 import { auth } from "./firebase";
 import api from "../services/api";
@@ -38,7 +38,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [activeOrgId, setActiveOrgId] = useState<string | null>(localStorage.getItem("activeOrgId"));
   const [loading, setLoading] = useState(true);
 
-  const fetchContext = async () => {
+  const fetchContext = useCallback(async () => {
     try {
       const response = await api.get("/auth/me");
       const { user: userData, memberships: memsData, organizations: orgsData } = response.data.data;
@@ -68,7 +68,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error("Error fetching user context:", error);
       
       // If we are logged in to Firebase but the backend fails, it's usually a configuration issue
-      if (firebaseUser) {
+      if (auth.currentUser) {
         if (error.response?.status === 500) {
           toast.error("Application backend error. Please check if server-side Firebase Admin environment variables are set correctly in your .env file.", {
             duration: 10000,
@@ -80,7 +80,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (fUser) => {
@@ -97,19 +97,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     return () => unsubscribeAuth();
-  }, []);
+  }, [fetchContext]);
 
-  const switchOrg = (orgId: string) => {
+  const switchOrg = useCallback((orgId: string) => {
     setActiveOrgId(orgId);
     localStorage.setItem("activeOrgId", orgId);
-  };
+  }, []);
 
-  const refreshContext = async () => {
+  const refreshContext = useCallback(async () => {
     setLoading(true);
     await fetchContext();
-  };
+  }, [fetchContext]);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     try {
       await auth.signOut();
       localStorage.removeItem("activeOrgId");
@@ -118,7 +118,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error("Error logging out:", error);
       toast.error("Failed to log out");
     }
-  };
+  }, []);
 
   const activeMembership = memberships.find(m => m.organizationId === activeOrgId);
   const activeOrg = activeOrgId ? organizations[activeOrgId] || null : null;

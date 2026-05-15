@@ -17,10 +17,11 @@ export const getOrders = async (req: AuthRequest, res: Response) => {
 
 export const deliverOrder = async (req: AuthRequest, res: Response) => {
   try {
+    if (!req.orgId) return sendError(res, "Org ID missing", 400);
     const { id } = req.params;
     const { paymentStatus, amountCollected, note } = req.body;
 
-    const order = await orderService.deliverOrder(id, {
+    const order = await orderService.deliverOrder(id, req.orgId, {
       paymentStatus,
       amountCollected,
       note,
@@ -44,7 +45,8 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
 
     const order = await orderService.createOrder(req.orgId, supplierId, {
       ...req.body,
-      retailerId: finalRetailerId
+      retailerId: req.orgId,
+      userId: req.user.uid
     });
     sendSuccess(res, order, "Order created", 201);
   } catch (error: any) {
@@ -54,9 +56,10 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
 
 export const assignOrder = async (req: AuthRequest, res: Response) => {
   try {
+    if (!req.orgId) return sendError(res, "Org ID missing", 400);
     const { id } = req.params;
     const { employeeId, employeeName } = req.body;
-    const result = await orderService.assignOrder(id, employeeId === "unassigned" ? null : employeeId, employeeName);
+    const result = await orderService.assignOrder(id, req.orgId, employeeId === "unassigned" ? null : employeeId, employeeName);
     sendSuccess(res, result);
   } catch (error: any) {
     sendError(res, error.message);
@@ -65,9 +68,10 @@ export const assignOrder = async (req: AuthRequest, res: Response) => {
 
 export const updatePayment = async (req: AuthRequest, res: Response) => {
   try {
+    if (!req.orgId) return sendError(res, "Org ID missing", 400);
     const { id } = req.params;
     const { status } = req.body;
-    const result = await orderService.updatePaymentStatus(id, status);
+    const result = await orderService.updatePaymentStatus(id, req.orgId, status);
     sendSuccess(res, result);
   } catch (error: any) {
     sendError(res, error.message);

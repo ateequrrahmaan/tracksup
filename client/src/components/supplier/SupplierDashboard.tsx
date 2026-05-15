@@ -85,7 +85,7 @@ export const SupplierDashboard = () => {
           .catch(err => console.error("Error fetching name for:", id, err));
       });
     }
-  }, [orders, retailers, employees]);
+  }, [orders, retailers, employees, fetchedNames]);
 
   // Data Fetching
   useEffect(() => {

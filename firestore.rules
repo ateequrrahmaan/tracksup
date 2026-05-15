@@ -56,7 +56,8 @@ service cloud.firestore {
       return data.name is string && data.name.size() <= 200 &&
              data.type in ['supplier', 'retailer'] &&
              data.ownerId is string &&
-             data.keys().hasAll(['name', 'type', 'ownerId']);
+             data.keys().hasAll(['name', 'type', 'ownerId']) &&
+             data.keys().size() >= 3 && data.keys().size() <= 5; // Allow for createdAt/updatedAt
     }
 
     match /organizations/{orgId} {

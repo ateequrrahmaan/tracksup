@@ -29,24 +29,36 @@ export const createProduct = async (supplierId: string, data: any) => {
   return { id: docRef.id, ...productData };
 };
 
-export const updateProduct = async (productId: string, data: any) => {
+export const updateProduct = async (productId: string, supplierId: string, data: any) => {
   const firestore = db();
   if (!firestore) throw new Error("Firestore not initialized");
+
+  const docRef = firestore.collection("products").doc(productId);
+  const doc = await docRef.get();
+  
+  if (!doc.exists) throw new Error("Product not found");
+  if (doc.data()?.supplierId !== supplierId) throw new Error("Unauthorized to update this product");
 
   const productData = {
     ...data,
     updatedAt: admin.firestore.FieldValue.serverTimestamp()
   };
 
-  await firestore.collection("products").doc(productId).update(productData);
+  await docRef.update(productData);
   return { id: productId, ...productData };
 };
 
-export const deleteProduct = async (productId: string) => {
+export const deleteProduct = async (productId: string, supplierId: string) => {
   const firestore = db();
   if (!firestore) throw new Error("Firestore not initialized");
 
-  await firestore.collection("products").doc(productId).delete();
+  const docRef = firestore.collection("products").doc(productId);
+  const doc = await docRef.get();
+
+  if (!doc.exists) throw new Error("Product not found");
+  if (doc.data()?.supplierId !== supplierId) throw new Error("Unauthorized to delete this product");
+
+  await docRef.delete();
   return { success: true };
 };
 

@@ -29,8 +29,9 @@ export const createProduct = async (req: AuthRequest, res: Response) => {
 
 export const updateProduct = async (req: AuthRequest, res: Response) => {
   try {
+    if (!req.orgId) return sendError(res, "Organization ID required", 400);
     const { id } = req.params;
-    const product = await productService.updateProduct(id, req.body);
+    const product = await productService.updateProduct(id, req.orgId, req.body);
     sendSuccess(res, product, "Product updated successfully");
   } catch (error: any) {
     sendError(res, error.message);
@@ -39,8 +40,9 @@ export const updateProduct = async (req: AuthRequest, res: Response) => {
 
 export const deleteProduct = async (req: AuthRequest, res: Response) => {
   try {
+    if (!req.orgId) return sendError(res, "Organization ID required", 400);
     const { id } = req.params;
-    await productService.deleteProduct(id);
+    await productService.deleteProduct(id, req.orgId);
     sendSuccess(res, null, "Product deleted successfully");
   } catch (error: any) {
     sendError(res, error.message);
