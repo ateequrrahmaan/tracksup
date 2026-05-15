@@ -2,6 +2,8 @@ import React from "react";
 import { AuthProvider, useAuth } from "./lib/auth-context";
 import { AuthForms } from "./components/auth/AuthForms";
 import { Toaster } from "sonner";
+import { hasFirebaseConfig } from "./lib/firebase";
+import { AlertCircle } from "lucide-react";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { SupplierDashboard } from "./components/supplier/SupplierDashboard";
 import { EmployeeDashboard } from "./components/employee/EmployeeDashboard";
@@ -102,6 +104,14 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter>
         <TooltipProvider>
+          {!hasFirebaseConfig && (
+            <div className="fixed top-0 left-0 right-0 z-50 bg-rose-600 text-white p-3 text-center flex items-center justify-center gap-3 shadow-2xl animate-in slide-in-from-top duration-500">
+               <AlertCircle className="h-5 w-5" />
+               <p className="text-[11px] font-black uppercase tracking-widest leading-none">
+                 Firebase Configuration Missing: Run the "Setup Firebase" tool to enable live data.
+               </p>
+            </div>
+          )}
           <AppContent />
           <Toaster position="top-center" richColors />
         </TooltipProvider>

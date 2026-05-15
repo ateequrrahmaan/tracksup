@@ -81,18 +81,19 @@ export const db = () => {
   
   const databaseId = process.env.FIREBASE_DATABASE_ID?.trim();
   try {
-    // Attempt to identify which database we are connecting to
-    if (databaseId) {
-      console.log(`[Firebase] Attempting connection to specified database: ${databaseId}`);
+    // If databaseId is empty or is "(default)", use the default getFirestore(app) call
+    const effectiveDbId = (databaseId && databaseId !== "(default)") ? databaseId : undefined;
+    
+    if (effectiveDbId) {
+      console.log(`[Firebase] Attempting connection to specified database: ${effectiveDbId}`);
     } else {
-      console.warn("[Firebase] FIREBASE_DATABASE_ID not set. Defaulting to (default) database.");
+      console.log("[Firebase] Using default database instance.");
     }
     
-    const dbInstance = databaseId ? getFirestore(app, databaseId) : getFirestore(app);
-    console.log(`[Firebase] Firestore instance obtained ${databaseId ? `for database: ${databaseId}` : "(default database)"}`);
+    const dbInstance = effectiveDbId ? getFirestore(app, effectiveDbId) : getFirestore(app);
     return dbInstance;
   } catch (error: any) {
-    console.error(`[Firebase] Error getting Firestore instance ${databaseId ? `for database: ${databaseId}` : "(default database)"}:`, error.message);
+    console.error(`[Firebase] Error getting Firestore instance: ${error.message}`);
     return null;
   }
 };

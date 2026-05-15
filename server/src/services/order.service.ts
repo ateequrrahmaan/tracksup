@@ -1,13 +1,15 @@
 import admin from "firebase-admin";
 import { db } from "./firebase.service.js";
 
-export const getOrdersByOrg = async (orgId: string) => {
+export const getOrdersByOrg = async (orgId: string, userId?: string) => {
   const firestore = db();
   if (!firestore) throw new Error("Firestore not initialized");
 
-  // Fetch orders where this org is the retailer
+  // Fetch orders where this org is the retailer OR this specific user is the retailer
+  const retailerIds = Array.from(new Set([orgId, userId].filter(Boolean)));
+
   const retailerOrders = await firestore.collection("orders")
-    .where("organizationId", "==", orgId)
+    .where("retailerId", "in", retailerIds)
     .orderBy("createdAt", "desc")
     .limit(100)
     .get();
@@ -19,11 +21,12 @@ export const getOrdersByOrg = async (orgId: string) => {
     .limit(100)
     .get();
 
-  // Combine and sort by createdAt
-  const allOrders = [
-    ...retailerOrders.docs.map(doc => ({ id: doc.id, ...doc.data() })),
-    ...supplierOrders.docs.map(doc => ({ id: doc.id, ...doc.data() }))
-  ];
+  // Combined fetch (avoiding duplicates)
+  const ordersMap = new Map();
+  retailerOrders.docs.forEach(doc => ordersMap.set(doc.id, { id: doc.id, ...doc.data() }));
+  supplierOrders.docs.forEach(doc => ordersMap.set(doc.id, { id: doc.id, ...doc.data() }));
+  
+  const allOrders = Array.from(ordersMap.values());
 
   return allOrders.sort((a: any, b: any) => {
     const timeA = a.createdAt?.toDate?.()?.getTime() || 0;

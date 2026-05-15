@@ -9,9 +9,15 @@ const isPlaceholder = (val: string) => !val || val.startsWith("PLACEHOLDER_");
 
 const getCfg = (envKey: keyof ImportMetaEnv, localVal: string) => {
   const envVal = import.meta.env[envKey] as string;
-  return (!isPlaceholder(envVal)) ? envVal : ((!isPlaceholder(localVal)) ? localVal : "");
+  const isEnvPlaceholder = !envVal || envVal.startsWith("PLACEHOLDER_");
+  const isLocalPlaceholder = !localVal || localVal.startsWith("PLACEHOLDER_");
+
+  if (!isEnvPlaceholder) return envVal;
+  if (!isLocalPlaceholder) return localVal;
+  return undefined;
 };
 
+const rawDbId = getCfg("VITE_FIREBASE_DATABASE_ID" as any, localConfig.firestoreDatabaseId);
 const firebaseConfig = {
   apiKey: getCfg("VITE_FIREBASE_API_KEY", localConfig.apiKey),
   authDomain: getCfg("VITE_FIREBASE_AUTH_DOMAIN", localConfig.authDomain),
@@ -20,12 +26,41 @@ const firebaseConfig = {
   messagingSenderId: getCfg("VITE_FIREBASE_MESSAGING_SENDER_ID", localConfig.messagingSenderId),
   appId: getCfg("VITE_FIREBASE_APP_ID", localConfig.appId),
   measurementId: getCfg("VITE_FIREBASE_MEASUREMENT_ID" as any, localConfig.measurementId),
-  firestoreDatabaseId: getCfg("VITE_FIREBASE_DATABASE_ID" as any, localConfig.firestoreDatabaseId) || '(default)'
+  firestoreDatabaseId: (rawDbId && rawDbId !== "(default)") ? rawDbId : undefined
 };
 
-const app = initializeApp(firebaseConfig);
+// Diagnostic log for configuration issues
+if (!firebaseConfig.projectId || !firebaseConfig.apiKey) {
+  console.warn("[Firestore] WARNING: Missing or placeholder configuration detected. Local config:", localConfig);
+}
+
+const app = initializeApp(firebaseConfig as any);
 export const auth = getAuth(app);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+export const db = firebaseConfig.firestoreDatabaseId 
+  ? getFirestore(app, firebaseConfig.firestoreDatabaseId) 
+  : getFirestore(app);
+
+export const hasFirebaseConfig = !!(firebaseConfig.projectId && firebaseConfig.apiKey);
+
+import { doc, getDocFromServer } from 'firebase/firestore';
+
+async function testConnection() {
+  try {
+    console.log(`[Firestore] Initializing connection to project: ${firebaseConfig.projectId}, database: ${firebaseConfig.firestoreDatabaseId || '(default)'}`);
+    await getDocFromServer(doc(db, 'test', 'connection'));
+    console.log("[Firestore] Connection verified successfully.");
+  } catch (error) {
+    if(error instanceof Error && (error.message.includes('the client is offline') || error.message.includes('not found'))) {
+      const isPlaceholder = (val: string) => !val || val.startsWith("PLACEHOLDER_");
+      const hasPlaceholders = isPlaceholder(firebaseConfig.projectId) || isPlaceholder(firebaseConfig.apiKey);
+      console.error("[Firestore] Database initialization issue encountered:", error.message);
+      if (hasPlaceholders) {
+        console.error("[Firestore] CRITICAL: Placeholder values detected in firebase-applet-config.json. Please run the 'Setup Firebase' tool to provision a database.");
+      }
+    }
+  }
+}
+testConnection();
 
 export enum OperationType {
   CREATE = 'create',

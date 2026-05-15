@@ -350,11 +350,10 @@ export const RetailerDashboard = () => {
   useEffect(() => {
     if (!user || !activeOrg) return;
 
-    // Filter by retailerId AND supplierId to show data for the active account
+    const retailerIds = Array.from(new Set([user.uid, activeOrg.id].filter(Boolean)));
     const ordersQuery = query(
       collection(db, "orders"), 
-      where("retailerId", "==", user.uid),
-      where("supplierId", "==", activeOrg.id),
+      where("retailerId", "in", retailerIds),
       orderBy("createdAt", "desc")
     );
     

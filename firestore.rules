@@ -1,157 +1,142 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
-    // 0. Global Safety Net
+    // -------------------------------------------------------------------------
+    // GLOBAL HELPERS
+    // -------------------------------------------------------------------------
+    function isSignedIn() { return request.auth != null; }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    function getMembership(userId, orgId) {
+      return get(/databases/$(database)/documents/memberships/$(userId + '_' + orgId)).data;
+    }
+    
+    function isMemberOf(orgId) {
+      return isSignedIn() && exists(/databases/$(database)/documents/memberships/$(request.auth.uid + '_' + orgId));
+    }
+
+    function hasOrgRole(orgId, roles) {
+      return isMemberOf(orgId) && getMembership(request.auth.uid, orgId).role in roles;
+    }
+
+    // Default deny
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // --- Helpers ---
-    function isSignedIn() {
-      return request.auth != null;
+    // Diagnostic test path
+    match /test/connection {
+      allow get: if true;
     }
 
-    function incoming() {
-      return request.resource.data;
+    // -------------------------------------------------------------------------
+    // USERS
+    // -------------------------------------------------------------------------
+    function isValidUser(data) {
+      return data.uid is string && data.uid.size() <= 128 &&
+             data.name is string && data.name.size() <= 200 &&
+             data.email is string && data.email.size() <= 200;
     }
 
-    function existing() {
-      return resource.data;
-    }
-
-    function getMembership(orgId) {
-      return get(/databases/$(database)/documents/memberships/$(request.auth.uid + "_" + orgId)).data;
-    }
-
-    function hasMembership(orgId) {
-      return isSignedIn() && orgId is string && exists(/databases/$(database)/documents/memberships/$(request.auth.uid + "_" + orgId));
-    }
-
-    function isRole(orgId, role) {
-      return hasMembership(orgId) && getMembership(orgId).get('role', '') == role;
-    }
-
-    function isOrgAdmin(orgId) {
-      return isRole(orgId, 'supplier') || isRole(orgId, 'admin') || (isSignedIn() && exists(/databases/$(database)/documents/organizations/$(orgId)) && get(/databases/$(database)/documents/organizations/$(orgId)).data.ownerId == request.auth.uid);
-    }
-
-    function isValidId(id) { 
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); 
-    }
-
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
-    }
-
-    function isVerified() {
-      // Relaxing email verification requirement for development/demo ease
-      return isSignedIn();
-    }
-
-    // --- User Rules ---
     match /users/{userId} {
       allow get: if isSignedIn();
-      allow list: if isSignedIn(); 
-      allow create: if isVerified() && isOwner(userId);
-      allow update: if isVerified() && isOwner(userId);
+      allow list: if isSignedIn();
+      allow create: if isOwner(userId) && isValidUser(incoming());
+      allow update: if isOwner(userId) && isValidUser(incoming()) && 
+                    incoming().diff(existing()).affectedKeys().hasOnly(['name', 'email', 'updatedAt']);
     }
 
-    // --- Organization Rules ---
+    // -------------------------------------------------------------------------
+    // ORGANIZATIONS
+    // -------------------------------------------------------------------------
+    function isValidOrg(data) {
+      return data.name is string && data.name.size() <= 200 &&
+             data.type in ['supplier', 'retailer'] &&
+             data.ownerId is string &&
+             data.keys().hasAll(['name', 'type', 'ownerId']);
+    }
+
     match /organizations/{orgId} {
-      allow get: if isSignedIn() && (hasMembership(orgId) || resource.data.ownerId == request.auth.uid);
-      allow list: if isSignedIn() && (hasMembership(orgId) || resource.data.ownerId == request.auth.uid);
-      allow create: if isVerified();
-      allow update: if isVerified() && (isOrgAdmin(orgId) || resource.data.ownerId == request.auth.uid);
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && incoming().ownerId == request.auth.uid && isValidId(orgId) && isValidOrg(incoming());
+      allow update: if hasOrgRole(orgId, ['supplier', 'retailer', 'owner']) && isValidOrg(incoming());
     }
 
-    // --- Membership Rules ---
+    // -------------------------------------------------------------------------
+    // MEMBERSHIPS
+    // -------------------------------------------------------------------------
+    function isValidMembership(data) {
+      return data.userId is string &&
+             data.organizationId is string &&
+             data.role in ['owner', 'admin', 'employee', 'retailer', 'supplier'] &&
+             data.status in ['active', 'inactive'];
+    }
+
     match /memberships/{membershipId} {
-      function isValidMembership(data) {
-        return data.userId is string && data.userId.size() <= 128
-          && data.organizationId is string && data.organizationId.size() <= 128
-          && data.role in ['supplier', 'employee', 'retailer', 'admin']
-          && data.status in ['active', 'pending', 'inactive']
-          && data.keys().hasAll(['userId', 'organizationId', 'role', 'status'])
-          && data.keys().size() >= 4;
-      }
-      
-      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isOrgAdmin(resource.data.organizationId));
-      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isOrgAdmin(resource.data.organizationId));
-      allow create: if isVerified() && isValidMembership(incoming());
-      allow update: if isVerified() && isOrgAdmin(existing().organizationId) && isValidMembership(incoming());
-      allow delete: if isVerified() && (resource.data.userId == request.auth.uid || isOrgAdmin(resource.data.organizationId));
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isMemberOf(resource.data.organizationId));
+      allow create: if isSignedIn(); 
+      allow update: if isSignedIn() && hasOrgRole(existing().organizationId, ['owner', 'admin', 'supplier', 'retailer']);
+      allow delete: if isSignedIn() && hasOrgRole(existing().organizationId, ['owner', 'admin', 'supplier', 'retailer']);
     }
 
-    // --- Invite Rules ---
-    match /invites/{inviteId} {
-      function isValidInvite(data) {
-        return data.organizationId is string && data.organizationId.size() <= 128
-          && data.email is string && data.email.size() <= 256
-          && data.token is string && data.token.size() <= 128
-          && data.status in ['pending', 'accepted', 'rejected']
-          && (data.expiresAt is timestamp || data.expiresAt is string);
-      }
-
-      allow get: if true; // Public for initially fetching context by token
-      allow list: if isSignedIn() && isOrgAdmin(resource.data.organizationId);
-      allow create: if isVerified() && isOrgAdmin(incoming().organizationId) && isValidInvite(incoming());
-      allow update: if isVerified() && isOrgAdmin(existing().organizationId) && isValidInvite(incoming()); // Only admin can update details
-      allow delete: if isVerified() && isOrgAdmin(existing().organizationId);
+    // -------------------------------------------------------------------------
+    // PRODUCTS
+    // -------------------------------------------------------------------------
+    function isValidProduct(data) {
+      return data.name is string && data.name.size() <= 200 &&
+             data.price is number && data.price >= 0 &&
+             data.currency is string && data.currency.size() <= 10 &&
+             data.supplierId is string;
     }
 
-    // --- Order Rules ---
+    match /products/{productId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && hasOrgRole(incoming().supplierId, ['supplier', 'owner', 'admin']) && isValidProduct(incoming());
+      allow update: if isSignedIn() && hasOrgRole(existing().supplierId, ['supplier', 'owner', 'admin']) && isValidProduct(incoming());
+      allow delete: if isSignedIn() && hasOrgRole(existing().supplierId, ['supplier', 'owner', 'admin']);
+    }
+
+    // -------------------------------------------------------------------------
+    // ORDERS
+    // -------------------------------------------------------------------------
+    function isValidOrder(data) {
+      return data.supplierId is string &&
+             data.retailerId is string &&
+             data.totalAmount is number &&
+             data.status in ['pending', 'processing', 'shipped', 'delivered', 'cancelled'];
+    }
+
     match /orders/{orderId} {
-      function isValidOrder(data) {
-        return data.get('organizationId', '') is string && data.get('organizationId', '').size() <= 128
-          && data.get('supplierId', '') is string && data.get('supplierId', '').size() <= 128
-          && data.get('retailerId', '') is string && data.get('retailerId', '').size() <= 128
-          && data.status in ['pending', 'assigned', 'out_for_delivery', 'delivered']
-          && data.totalAmount is number
-          && data.totalAmount >= 0
-          && (data.get('currency', 'USD') is string && data.get('currency', 'USD').size() <= 3)
-          && (data.get('payment_status', 'unpaid') in ['paid', 'unpaid', 'credit'])
-          && (data.get('amount_collected', 0) is number)
-          && (data.get('retailerName', '') is string && data.get('retailerName', '').size() <= 256);
-      }
-
-    function isOrderParticipant(data) {
-        return isSignedIn() && (
-          (data.get('retailerId', '') != '' && isOwner(data.retailerId)) ||
-          (data.get('employeeId', '') != '' && isOwner(data.employeeId)) ||
-          (data.get('supplierId', '') != '' && hasMembership(data.supplierId)) ||
-          (data.get('organizationId', '') != '' && hasMembership(data.organizationId))
-        );
-      }
-
-      allow get: if isSignedIn() && isOrderParticipant(resource.data);
-      allow list: if isSignedIn() && isOrderParticipant(resource.data);
-      allow create: if isVerified() && (isOrgAdmin(incoming().get('organizationId', '')) || isRole(incoming().get('organizationId', ''), 'retailer')) && isValidOrder(incoming());
-      allow update: if isVerified() && (
-        // Action: Admin Update (either retailer or supplier admin)
-        (existing().get('organizationId', '') != '' && isOrgAdmin(existing().organizationId) && isValidOrder(incoming())) ||
-        (existing().get('supplierId', '') != '' && isOrgAdmin(existing().supplierId) && isValidOrder(incoming())) ||
-        // Action: Employee Status Update (only if listed as employeeId)
-        (existing().get('employeeId', '') != '' && isOwner(existing().employeeId) 
-         && isValidOrder(incoming())
-         && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'delivered_at', 'payment_status', 'amount_collected', 'updatedAt', 'note']))
+      allow read: if isSignedIn() && (
+        resource.data.retailerId == request.auth.uid || 
+        isMemberOf(resource.data.retailerId) || 
+        isMemberOf(resource.data.supplierId)
+      );
+      allow create: if isSignedIn() && (incoming().retailerId == request.auth.uid || isMemberOf(incoming().retailerId)) && isValidOrder(incoming());
+      allow update: if isSignedIn() && (
+        // Retailer can cancel
+        (isMemberOf(existing().retailerId) && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']) && incoming().status == 'cancelled') ||
+        // Supplier can update anything
+        (hasOrgRole(existing().supplierId, ['supplier', 'owner', 'admin', 'employee']) && isValidOrder(incoming()))
       );
     }
 
-    // --- Product Rules ---
-    match /products/{productId} {
-      function isValidProduct(data) {
-        return data.get('supplierId', '') is string && data.get('supplierId', '').size() <= 128
-          && data.get('name', '') is string && data.get('name', '').size() <= 128
-          && data.price is number && data.price >= 0
-          && (data.get('currency', 'USD') is string && data.get('currency', 'USD').size() <= 3);
-      }
-
-      allow get: if isSignedIn() && (resource.data.get('supplierId', '') != '' && hasMembership(resource.data.supplierId));
-      allow list: if isSignedIn() && (resource.data.get('supplierId', '') != '' && hasMembership(resource.data.supplierId)); 
-      allow create: if isVerified() && isOrgAdmin(incoming().get('supplierId', '')) && isValidProduct(incoming());
-      allow update: if isVerified() && isOrgAdmin(existing().get('supplierId', '')) && isValidProduct(incoming());
-      allow delete: if isVerified() && isOrgAdmin(existing().get('supplierId', ''));
+    // -------------------------------------------------------------------------
+    // INVITES
+    // -------------------------------------------------------------------------
+    match /invites/{inviteId} {
+      allow get: if true; 
+      allow list: if isSignedIn() && isMemberOf(resource.data.organizationId);
+      allow create: if isSignedIn() && hasOrgRole(incoming().organizationId, ['supplier', 'retailer', 'owner', 'admin']);
+      allow update: if isSignedIn() && (
+        (incoming().diff(existing()).affectedKeys().hasOnly(['status', 'acceptedBy', 'updatedAt', 'acceptedAt'])) ||
+        hasOrgRole(existing().organizationId, ['supplier', 'retailer', 'owner', 'admin'])
+      );
+      allow delete: if isSignedIn() && hasOrgRole(existing().organizationId, ['supplier', 'retailer', 'owner', 'admin']);
     }
   }
 }

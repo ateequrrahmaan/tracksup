@@ -8,7 +8,7 @@ export const getOrders = async (req: AuthRequest, res: Response) => {
     if (!req.orgId) {
       return sendError(res, "Organization ID is required", 400);
     }
-    const orders = await orderService.getOrdersByOrg(req.orgId);
+    const orders = await orderService.getOrdersByOrg(req.orgId, req.user.uid);
     sendSuccess(res, orders);
   } catch (error: any) {
     sendError(res, error.message);

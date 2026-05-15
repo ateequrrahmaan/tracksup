@@ -5,5 +5,11 @@
     "camera",
     "geolocation"
   ],
-  "majorCapabilities": []
+  "majorCapabilities": [
+    "Supply Chain Management",
+    "Order Tracking",
+    "Digital Invoicing",
+    "Supplier-Retailer Network",
+    "Employee Management"
+  ]
 }

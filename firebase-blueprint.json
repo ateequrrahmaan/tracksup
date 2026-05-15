@@ -2,101 +2,126 @@
   "entities": {
     "User": {
       "title": "User",
-      "description": "User profile with global attributes",
+      "description": "User profile with basic information.",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "name": { "type": "string" },
-        "email": { "type": "string", "format": "email" },
-        "phone": { "type": "string" },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "uid": { "type": "string", "description": "Unique identifier for the user." },
+        "name": { "type": "string", "description": "Full name of the user." },
+        "email": { "type": "string", "format": "email", "description": "Email address of the user." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp." }
       },
-      "required": ["name", "email"]
+      "required": ["uid", "name", "email"]
     },
     "Organization": {
       "title": "Organization",
-      "description": "Tenant organization",
+      "description": "A supplier or retailer organization.",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "name": { "type": "string" },
-        "ownerId": { "type": "string" },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "name": { "type": "string", "description": "Name of the organization." },
+        "type": { "type": "string", "enum": ["supplier", "retailer"], "description": "Type of organization." },
+        "ownerId": { "type": "string", "description": "UID of the owner user." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp." }
       },
-      "required": ["name", "ownerId"]
-    },
-    "Membership": {
-      "title": "Membership",
-      "description": "Link between user and organization",
-      "type": "object",
-      "properties": {
-        "id": { "type": "string" },
-        "userId": { "type": "string" },
-        "organizationId": { "type": "string" },
-        "role": { "type": "string", "enum": ["supplier", "employee", "retailer"] },
-        "status": { "type": "string", "enum": ["active", "suspended"] }
-      },
-      "required": ["userId", "organizationId", "role", "status"]
-    },
-    "Invite": {
-      "title": "Invite",
-      "description": "Organization invitation for new members",
-      "type": "object",
-      "properties": {
-        "id": { "type": "string" },
-        "organizationId": { "type": "string" },
-        "email": { "type": "string" },
-        "role": { "type": "string" },
-        "token": { "type": "string" },
-        "status": { "type": "string", "enum": ["pending", "accepted", "expired", "rejected"] },
-        "expiresAt": { "type": "string", "format": "date-time" },
-        "invitedBy": { "type": "string" }
-      }
-    },
-    "Order": {
-      "title": "Order",
-      "description": "Delivery order scoped to organization",
-      "type": "object",
-      "properties": {
-        "id": { "type": "string" },
-        "organizationId": { "type": "string" },
-        "supplierId": { "type": "string" },
-        "retailerId": { "type": "string" },
-        "employeeId": { "type": "string" },
-        "retailerName": { "type": "string" },
-        "status": { "type": "string", "enum": ["pending", "assigned", "out_for_delivery", "delivered"] },
-        "totalAmount": { "type": "number" },
-        "deliveryDate": { "type": "string", "format": "date" },
-        "items": { "type": "array" },
-        "payment_status": { "type": "string", "enum": ["paid", "unpaid", "credit"] },
-        "amount_collected": { "type": "number" },
-        "delivered_at": { "type": "string", "format": "date-time" }
-      },
-      "required": ["organizationId", "supplierId", "retailerId", "status", "totalAmount"]
+      "required": ["name", "type", "ownerId"]
     },
     "Product": {
       "title": "Product",
-      "description": "Product offered by a supplier",
+      "description": "A product offered by a supplier.",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "supplierId": { "type": "string" },
-        "name": { "type": "string" },
-        "description": { "type": "string" },
-        "price": { "type": "number" },
-        "currency": { "type": "string" },
-        "imageUrl": { "type": "string" },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "name": { "type": "string", "description": "Name of the product." },
+        "description": { "type": "string", "description": "Description of the product." },
+        "price": { "type": "number", "description": "Unit price." },
+        "currency": { "type": "string", "description": "Currency code (e.g., USD)." },
+        "imageUrl": { "type": "string", "description": "URL of the product image." },
+        "supplierId": { "type": "string", "description": "ID of the supplier organization." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last update timestamp." }
       },
-      "required": ["supplierId", "name", "price", "currency"]
+      "required": ["name", "price", "currency", "supplierId"]
+    },
+    "Membership": {
+      "title": "Membership",
+      "description": "Links a user to an organization with a specific role.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "UID of the user." },
+        "organizationId": { "type": "string", "description": "ID of the organization." },
+        "role": { "type": "string", "enum": ["owner", "admin", "employee", "retailer"], "description": "Role within the organization." },
+        "status": { "type": "string", "enum": ["active", "inactive"], "description": "Membership status." }
+      },
+      "required": ["userId", "organizationId", "role", "status"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "An order placed by a retailer to a supplier.",
+      "type": "object",
+      "properties": {
+        "supplierId": { "type": "string", "description": "ID of the supplier organization." },
+        "supplierName": { "type": "string", "description": "Name of the supplier organization." },
+        "retailerId": { "type": "string", "description": "ID of the retailer organization (or user UID)." },
+        "retailerName": { "type": "string", "description": "Name of the retailer organization." },
+        "totalAmount": { "type": "number", "description": "Total order amount." },
+        "currency": { "type": "string", "description": "Currency code." },
+        "deliveryDate": { "type": "string", "format": "date", "description": "Scheduled delivery date." },
+        "status": { "type": "string", "enum": ["pending", "processing", "shipped", "delivered", "cancelled"], "description": "Order status." },
+        "payment_status": { "type": "string", "enum": ["unpaid", "paid"], "description": "Payment status." },
+        "items": { 
+          "type": "array", 
+          "description": "List of ordered items.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "quantity": { "type": "number" },
+              "price": { "type": "number" }
+            }
+          }
+        },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last update timestamp." }
+      },
+      "required": ["supplierId", "retailerId", "totalAmount", "status"]
+    },
+    "Invite": {
+      "title": "Invite",
+      "description": "An invitation to join an organization.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email", "description": "Recipient email." },
+        "role": { "type": "string", "enum": ["employee", "retailer"], "description": "Role to be assigned." },
+        "status": { "type": "string", "enum": ["pending", "accepted", "declined"], "description": "Invite status." },
+        "organizationId": { "type": "string", "description": "ID of the organization." },
+        "organizationName": { "type": "string", "description": "Name of the organization." },
+        "expiresAt": { "type": "string", "format": "date-time", "description": "Expiration timestamp." }
+      },
+      "required": ["email", "role", "status", "organizationId"]
     }
   },
   "firestore": {
-    "/users/{userId}": { "schema": "User", "description": "Global user profiles" },
-    "/organizations/{orgId}": { "schema": "Organization", "description": "Tenant metadata" },
-    "/memberships/{membershipId}": { "schema": "Membership", "description": "User-Org mappings" },
-    "/invites/{inviteId}": { "schema": "Invite", "description": "Pending invitations" },
-    "/orders/{orderId}": { "schema": "Order", "description": "Multi-tenant orders" },
-    "/products/{productId}": { "schema": "Product", "description": "Supplier product catalog" }
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles."
+    },
+    "/organizations/{orgId}": {
+      "schema": "Organization",
+      "description": "Supplier and retailer organizations."
+    },
+    "/products/{productId}": {
+      "schema": "Product",
+      "description": "Supplier product catalogs."
+    },
+    "/memberships/{membershipId}": {
+      "schema": "Membership",
+      "description": "User-organization relationships."
+    },
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Retail orders."
+    },
+    "/invites/{inviteId}": {
+      "schema": "Invite",
+      "description": "Invitations to join organizations."
+    }
   }
 }

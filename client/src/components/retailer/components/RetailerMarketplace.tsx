@@ -76,7 +76,7 @@ export const RetailerMarketplace: React.FC<RetailerMarketplaceProps> = ({ initia
       await api.post("/orders", {
         supplierId: selectedProduct.supplierId, 
         supplierName: selectedProduct.supplierName,
-        retailerId: user.uid,
+        retailerId: activeOrg.id,
         retailerName: activeOrg.name, 
         totalAmount: selectedProduct.price * quantity,
         currency: selectedProduct.currency,
