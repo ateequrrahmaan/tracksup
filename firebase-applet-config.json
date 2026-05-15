@@ -1,10 +1,10 @@
 {
-  "projectId": "gen-lang-client-0795000146",
-  "appId": "1:687283701870:web:19e1a6c002016467cafe7f",
-  "apiKey": "AIzaSyAhb5qBe5TN6PPFAj6uObit-gagK2sQbfs",
-  "authDomain": "gen-lang-client-0795000146.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-e6834286-adbf-40a0-93ff-4b740a82ae6e",
-  "storageBucket": "gen-lang-client-0795000146.firebasestorage.app",
-  "messagingSenderId": "687283701870",
-  "measurementId": ""
+  "projectId": "PLACEHOLDER_PROJECT_ID",
+  "appId": "PLACEHOLDER_APP_ID",
+  "apiKey": "PLACEHOLDER_API_KEY",
+  "authDomain": "PLACEHOLDER_AUTH_DOMAIN",
+  "firestoreDatabaseId": "PLACEHOLDER_DATABASE_ID",
+  "storageBucket": "PLACEHOLDER_STORAGE_BUCKET",
+  "messagingSenderId": "PLACEHOLDER_MESSAGING_SENDER_ID",
+  "measurementId": "PLACEHOLDER_MEASUREMENT_ID"
 }

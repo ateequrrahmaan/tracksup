@@ -7,11 +7,9 @@ import morgan from "morgan";
 import helmet from "helmet";
 import { rateLimit } from "express-rate-limit";
 import { config } from "dotenv";
-import { fileURLToPath } from "url";
 
-// Resolving __dirname for ESM
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Resolving paths relative to root
+const __dirname = process.cwd();
 
 // Load environment variables
 config(); 
@@ -83,8 +81,8 @@ async function startServer() {
   });
 
   // Vite Integration (only if running from root with access to client)
-  const clientRoot = path.join(__dirname, "../client");
-  const viteConfig = path.join(__dirname, "../vite.config.ts");
+  const clientRoot = path.join(__dirname, "client");
+  const viteConfig = path.join(__dirname, "vite.config.ts");
   
   if (process.env.NODE_ENV !== "production") {
     try {
