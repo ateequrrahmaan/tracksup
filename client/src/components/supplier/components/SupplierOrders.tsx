@@ -5,8 +5,9 @@ import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ChevronRight, Search, AlertCircle } from "lucide-react";
+import { ChevronRight, Search, AlertCircle, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 interface SupplierOrdersProps {
   orders: Order[];
@@ -24,6 +25,7 @@ interface SupplierOrdersProps {
   onOrderSelect: (order: Order) => void;
   onPaymentStatusUpdate: (orderId: string, status: string) => void;
   onEmployeeAssign: (orderId: string, employeeId: string) => void;
+  onOrderDelete: (orderId: string) => void;
 }
 
 export const SupplierOrders: React.FC<SupplierOrdersProps> = ({
@@ -42,6 +44,7 @@ export const SupplierOrders: React.FC<SupplierOrdersProps> = ({
   onOrderSelect,
   onPaymentStatusUpdate,
   onEmployeeAssign,
+  onOrderDelete,
 }) => {
   // Compute unique retailers for filter
   const uniqueRetailerIds = Array.from(new Set(orders.map(o => o.retailerId).filter(Boolean))) as string[];
@@ -112,6 +115,7 @@ export const SupplierOrders: React.FC<SupplierOrdersProps> = ({
                 <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 px-10">Payment</TableHead>
                 <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 px-10">Assigned To</TableHead>
                 <TableHead className="text-right text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 px-10">Total Amount</TableHead>
+                <TableHead className="w-[60px]"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -196,6 +200,22 @@ export const SupplierOrders: React.FC<SupplierOrdersProps> = ({
                       </div>
                     </div>
                   </TableCell>
+                  <TableCell className="pr-10">
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-10 w-10 text-rose-300 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        console.log(`[SupplierOrders] Purge initiated for: ${order.id}`);
+                        if (window.confirm(`PURGE MANIFEST #${order.id.slice(-8).toUpperCase()}?\nThis action is permanent.`)) {
+                          onOrderDelete(order.id);
+                        }
+                      }}
+                    >
+                      <Trash2 className="h-5 w-5" />
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -227,6 +247,22 @@ export const SupplierOrders: React.FC<SupplierOrdersProps> = ({
                   <p className="font-mono text-[9px] font-black text-zinc-400 uppercase tracking-wider">#{order.id.slice(-8).toUpperCase()} • {order.deliveryDate}</p>
                 </div>
                 <p className="font-black text-zinc-900 text-lg italic tracking-tighter">{formatCurrency(order.totalAmount, order.currency)}</p>
+                <div className="flex items-center gap-2">
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-10 w-10 text-rose-500 hover:bg-rose-50 rounded-xl shadow-sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      console.log(`[SupplierOrders] Mobile Delete clicked for order: ${order.id}`);
+                      if (window.confirm(`PURGE MANIFEST #${order.id.slice(-8).toUpperCase()}?\nThis action is permanent.`)) {
+                        onOrderDelete(order.id);
+                      }
+                    }}
+                  >
+                    <Trash2 className="h-5 w-5" />
+                  </Button>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">

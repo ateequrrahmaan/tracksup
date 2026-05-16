@@ -111,45 +111,47 @@ export const createOrder = async (orgId: string, supplierId: string, data: any) 
     throw new Error("Retailer ID is required");
   }
 
-  // Determine if caller is supplier or retailer
-  const isSupplierAction = orgId === supplierId;
-  console.log("[OrderService] Action type:", isSupplierAction ? "Supplier" : "Retailer/Other");
-  
-  if (isSupplierAction) {
-    console.log("[OrderService] Verifying supplier membership for user:", userId, "in org:", supplierId);
-    const supplierMembership = await firestore.collection("memberships")
-      .where("userId", "==", userId)
-      .where("organizationId", "==", supplierId)
-      .get();
-    
-    console.log("[OrderService] Supplier memberships found:", supplierMembership.size);
-    const hasPermission = supplierMembership.docs.some(doc => {
-      const role = doc.data().role;
-      return ['owner', 'admin', 'supplier', 'retailer'].includes(role);
-    });
+  // 2. Authorization
+  console.log(`[OrderService] Auth check: user=${userId}, retailer=${retailerId}, supplier=${supplierId}, orgContext=${orgId}`);
 
-    if (!hasPermission) {
-      console.error("[OrderService] Unauthorized supplier action. User roles:", supplierMembership.docs.map(d => d.data().role));
-      throw new Error("Unauthorized to order from this supplier. Your role doesn't permit order creation.");
+  // We allow order creation if:
+  // 1. The user is the retailer (personal order)
+  // 2. The user is a member of the retailer organization
+  // 3. The user is a member of the supplier organization (creating on behalf of a retailer)
+  
+  let isAuthorized = (retailerId === userId);
+
+  if (!isAuthorized) {
+    // Check memberships in parallel
+    const [retailerMembership, supplierMembership] = await Promise.all([
+      firestore.collection("memberships")
+        .where("userId", "==", userId)
+        .where("organizationId", "==", retailerId)
+        .where("status", "==", "active")
+        .get(),
+      firestore.collection("memberships")
+        .where("userId", "==", userId)
+        .where("organizationId", "==", supplierId)
+        .where("status", "==", "active")
+        .get()
+    ]);
+
+    if (!retailerMembership.empty) {
+      console.log(`[OrderService] Authorized via Retailer Org membership. Role: ${retailerMembership.docs[0].data().role}`);
+      isAuthorized = true;
+    } else if (!supplierMembership.empty) {
+      console.log(`[OrderService] Authorized via Supplier Org membership. Role: ${supplierMembership.docs[0].data().role}`);
+      isAuthorized = true;
+    } else {
+      console.log(`[OrderService] No active memberships found for user ${userId} in retailer ${retailerId} or supplier ${supplierId}`);
     }
   } else {
-    // 2. Caller is (presumably) the retailer. Verify connection to supplier.
-    console.log("[OrderService] Verifying retailer connection. User:", userId, "Connected to Supplier Org:", supplierId);
-    const membership = await firestore.collection("memberships")
-      .where("userId", "==", userId)
-      .where("organizationId", "==", supplierId)
-      .where("status", "==", "active")
-      .get();
+    console.log("[OrderService] Authorized: Personal retailer order");
+  }
 
-    console.log("[OrderService] Connections found:", membership.size, "Roles:", membership.docs.map(d => d.data().role));
-
-    // The connecting membership role should be 'retailer'
-    const isConnected = membership.docs.some(doc => doc.data().role === 'retailer');
-
-    if (!isConnected) {
-      console.error("[OrderService] No active 'retailer' membership found for user in supplier org");
-      throw new Error("You are not connected to this supplier as a retailer. Please accept an invite first.");
-    }
+  if (!isAuthorized) {
+    console.error("[OrderService] Authorization failed for order creation");
+    throw new Error("Unauthorized: You do not have permission to place orders for this retailer or supplier.");
   }
 
   // 3. Fetch trusted names
@@ -228,4 +230,32 @@ export const updatePaymentStatus = async (orderId: string, orgId: string, status
   });
 
   return { id: orderId, status };
+};
+
+export const deleteOrder = async (orderId: string, orgId: string) => {
+  const firestore = db();
+  if (!firestore) throw new Error("Firestore not initialized");
+
+  console.log(`[OrderService] deleteOrder: id=${orderId}, orgId=${orgId}`);
+
+  const orderRef = firestore.collection("orders").doc(orderId);
+  const orderDoc = await orderRef.get();
+
+  if (!orderDoc.exists) {
+    console.error(`[OrderService] Order ${orderId} not found`);
+    throw new Error("Order not found");
+  }
+  
+  const orderData = orderDoc.data()!;
+  console.log(`[OrderService] Found order. SupplierId in DB: ${orderData.supplierId}, Caller OrgId: ${orgId}`);
+
+  // Only the supplier of this order can delete it
+  if (orderData.supplierId !== orgId) {
+    console.error(`[OrderService] Unauthorized delete: order supplier=${orderData.supplierId}, caller=${orgId}`);
+    throw new Error("Unauthorized: Only the supplier can delete this order");
+  }
+
+  await orderRef.delete();
+  console.log(`[OrderService] Successfully deleted document ${orderId}`);
+  return { id: orderId, success: true };
 };

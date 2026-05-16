@@ -13,5 +13,6 @@ router.patch("/:id/deliver", orderController.deliverOrder);
 router.patch("/:id/status", orderController.updateStatus);
 router.patch("/:id/assign", orderController.assignOrder);
 router.patch("/:id/payment", orderController.updatePayment);
+router.delete("/:id", orderController.deleteOrder);
 
 export default router;

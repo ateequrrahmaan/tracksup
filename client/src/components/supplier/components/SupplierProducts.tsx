@@ -23,13 +23,15 @@ interface SupplierProductsProps {
   employees: SystemUser[];
   onPaymentStatusUpdate: (orderId: string, status: string) => void;
   onEmployeeAssign: (orderId: string, employeeId: string) => void;
+  onOrderDelete: (orderId: string) => void;
 }
 
 export const SupplierProducts: React.FC<SupplierProductsProps> = ({ 
   orders, 
   employees, 
   onPaymentStatusUpdate, 
-  onEmployeeAssign 
+  onEmployeeAssign,
+  onOrderDelete
 }) => {
   const { activeOrg } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
@@ -357,6 +359,7 @@ export const SupplierProducts: React.FC<SupplierProductsProps> = ({
                   <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 px-10">Total Amount</TableHead>
                   <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 px-10">Status</TableHead>
                   <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 px-10">Assigned To</TableHead>
+                  <TableHead className="w-[60px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -418,6 +421,22 @@ export const SupplierProducts: React.FC<SupplierProductsProps> = ({
                            ))}
                         </SelectContent>
                        </Select>
+                    </TableCell>
+                    <TableCell className="pr-10">
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-10 w-10 text-rose-300 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          console.log(`[SupplierProducts] Purge initiated for: ${order.id}`);
+                          if (window.confirm(`PURGE MANIFEST #${order.id.slice(-8).toUpperCase()}?\nThis action is permanent.`)) {
+                            onOrderDelete(order.id);
+                          }
+                        }}
+                      >
+                        <Trash2 className="h-5 w-5" />
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}

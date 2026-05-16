@@ -11,7 +11,8 @@ import { RetailerDashboard } from "./components/retailer/RetailerDashboard";
 import { Onboarding } from "./components/onboarding/Onboarding";
 import { InvitePage } from "./components/invite/InvitePage";
 import { Skeleton } from "./components/ui/skeleton";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { trackPageView } from "./lib/analytics";
 import { RetailerDetail } from "./components/supplier/RetailerDetail";
 import { EmployeeDetail } from "./components/supplier/EmployeeDetail";
 import { LandingPage } from "./components/landing/LandingPage";
@@ -27,6 +28,11 @@ const SettingsViewWrapper = () => (
 
 const AppContent = () => {
   const { user, loading, activeRole, memberships } = useAuth();
+  const location = useLocation();
+
+  React.useEffect(() => {
+    trackPageView(location.pathname + location.search);
+  }, [location.pathname, location.search]);
 
   if (loading) {
     return (
@@ -95,7 +101,7 @@ const AppContent = () => {
       
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+      </Routes>
   );
 };
 

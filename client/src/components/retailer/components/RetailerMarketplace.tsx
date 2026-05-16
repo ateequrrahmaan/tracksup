@@ -12,11 +12,19 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Search, ShoppingCart, Loader2, Package, Store, CheckCircle2, AlertCircle, Filter } from "lucide-react";
+import { Search, ShoppingCart, Loader2, Package, Store, CheckCircle2, AlertCircle, Filter, Plus, Minus, Trash2, ShoppingBag } from "lucide-react";
 import { toast } from "sonner";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetFooter } from "@/components/ui/sheet";
+import { Separator } from "@/components/ui/separator";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface RetailerMarketplaceProps {
   initialSupplierId?: string | null;
+}
+
+interface CartItem extends Product {
+  supplierName: string;
+  quantity: number;
 }
 
 export const RetailerMarketplace: React.FC<RetailerMarketplaceProps> = ({ initialSupplierId }) => {
@@ -26,10 +34,21 @@ export const RetailerMarketplace: React.FC<RetailerMarketplaceProps> = ({ initia
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedSupplierId, setSelectedSupplierId] = useState(initialSupplierId || activeOrg?.id || "all");
   const [suppliers, setSuppliers] = useState<{id: string, name: string}[]>([]);
-  const [selectedProduct, setSelectedProduct] = useState<(Product & { supplierName: string }) | null>(null);
-  const [quantity, setQuantity] = useState(1);
-  const [isOrderOpen, setIsOrderOpen] = useState(false);
+  const [cart, setCart] = useState<Record<string, CartItem>>(() => {
+    try {
+      const savedCart = localStorage.getItem("tracksup_cart");
+      return savedCart ? JSON.parse(savedCart) : {};
+    } catch (e) {
+      console.error("Failed to parse cart from localStorage:", e);
+      return {};
+    }
+  });
+  const [isCartOpen, setIsCartOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem("tracksup_cart", JSON.stringify(cart));
+  }, [cart]);
 
   useEffect(() => {
     fetchConnectedProducts();
@@ -67,41 +86,116 @@ export const RetailerMarketplace: React.FC<RetailerMarketplaceProps> = ({ initia
     }
   };
 
-  const handlePlaceOrder = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedProduct || !activeOrg || !user) return;
+  const addToCart = (product: Product & { supplierName: string }) => {
+    setCart(prev => {
+      const existing = prev[product.id];
+      if (existing) {
+        return {
+          ...prev,
+          [product.id]: { ...existing, quantity: existing.quantity + 1 }
+        };
+      }
+      return {
+        ...prev,
+        [product.id]: { ...product, quantity: 1 }
+      };
+    });
+    toast.success(`Added ${product.name} to cart`);
+  };
+
+  const updateCartQuantity = (productId: string, delta: number) => {
+    setCart(prev => {
+      const item = prev[productId];
+      if (item) {
+        const newQty = Math.max(1, item.quantity + delta);
+        return {
+          ...prev,
+          [productId]: { ...item, quantity: newQty }
+        };
+      }
+      return prev;
+    });
+  };
+
+  const removeFromCart = (productId: string) => {
+    setCart(prev => {
+      const { [productId]: removed, ...rest } = prev;
+      return rest;
+    });
+  };
+
+  const cartItems: CartItem[] = Object.values(cart);
+  const cartTotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const cartCurrency = cartItems[0]?.currency || "KES";
+
+  const handleCheckout = async () => {
+    console.log("[Marketplace] Attempting checkout", { cartItems, activeOrg, user });
+    
+    if (cartItems.length === 0) {
+      toast.error("Your cart is empty");
+      return;
+    }
+
+    if (!user) {
+      toast.error("You must be logged in to place an order.");
+      return;
+    }
+
+    // Relaxed requirement: if no activeOrg, we treat the user as a personal retailer
+    // But we still warn them if they might have meant to use an org
+    if (!activeOrg) {
+      console.warn("[Marketplace] No active organization selected, ordering as personal user.");
+    }
 
     setIsSubmitting(true);
     try {
-      // Determine retailerId: 
-      // 1. If we are active in an organization that IS the supplier, we use user.uid (connected retailer role)
-      // 2. Otherwise use the activeOrg.id (treating it as our own retailer organization)
-      const isMemberOfSupplier = activeOrg?.id === selectedProduct.supplierId;
-      const retailerId = isMemberOfSupplier ? user.uid : (activeOrg?.id || user.uid);
-      const retailerName = isMemberOfSupplier ? user.name : (activeOrg?.name || user.name);
-
-      await api.post("/orders", {
-        supplierId: selectedProduct.supplierId, 
-        supplierName: selectedProduct.supplierName,
-        retailerId,
-        retailerName, 
-        totalAmount: selectedProduct.price * quantity,
-        currency: selectedProduct.currency,
-        items: [{
-          name: selectedProduct.name,
-          quantity: quantity,
-          price: selectedProduct.price
-        }],
-        deliveryDate: new Date().toISOString().split('T')[0],
-        payment_status: "unpaid",
+      // Group items by supplierId
+      const groupedBySupplier = new Map<string, CartItem[]>();
+      cartItems.forEach(item => {
+        const items = groupedBySupplier.get(item.supplierId) || [];
+        items.push(item);
+        groupedBySupplier.set(item.supplierId, items);
       });
 
-      toast.success("Order placed successfully. Awaiting supplier approval.");
-      setIsOrderOpen(false);
-      setQuantity(1);
+      console.log("[Marketplace] Groups:", Array.from(groupedBySupplier.keys()));
+
+      // Place an order for each supplier
+      const orderPromises = Array.from(groupedBySupplier.entries()).map(([supplierId, items]) => {
+        const supplierName = items[0].supplierName;
+        const totalAmount = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        
+        const isMemberOfSupplier = activeOrg?.id === supplierId;
+        const retailerId = isMemberOfSupplier ? user!.uid : (activeOrg?.id || user!.uid);
+        const retailerName = isMemberOfSupplier ? user!.name : (activeOrg?.name || user!.name);
+
+        console.log(`[Marketplace] Placing order to ${supplierId} as ${retailerId}`);
+
+        return api.post("/orders", {
+          supplierId,
+          supplierName,
+          retailerId,
+          retailerName,
+          totalAmount,
+          currency: items[0].currency,
+          items: items.map(p => ({
+            name: p.name,
+            quantity: p.quantity,
+            price: p.price
+          })),
+          deliveryDate: new Date().toISOString().split('T')[0],
+          payment_status: "unpaid",
+        });
+      });
+
+      await Promise.all(orderPromises);
+
+      toast.success("All orders placed successfully!");
+      setCart({});
+      localStorage.removeItem("tracksup_cart");
+      setIsCartOpen(false);
     } catch (error: any) {
-      console.error("Error placing order:", error);
-      const message = error.response?.data?.error?.message || "Failed to place order.";
+      console.error("Error placing orders:", error);
+      const message = error.response?.data?.error?.message || "Failed to place orders.";
       toast.error(message);
     } finally {
       setIsSubmitting(false);
@@ -124,6 +218,116 @@ export const RetailerMarketplace: React.FC<RetailerMarketplaceProps> = ({ initia
             Browse and order products from your connected suppliers
           </p>
         </div>
+
+        <Sheet open={isCartOpen} onOpenChange={setIsCartOpen}>
+          <SheetTrigger 
+            render={
+              <Button className="rounded-2xl h-14 px-8 font-black uppercase italic tracking-widest bg-zinc-900 text-white shadow-2xl hover:scale-105 transition-all relative">
+                <ShoppingBag className="mr-2 h-5 w-5" />
+                Cart
+                {cartItems.length > 0 && (
+                  <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] h-6 w-6 rounded-full flex items-center justify-center border-4 border-white shadow-lg animate-in zoom-in duration-300">
+                    {cartItems.reduce((sum, item) => sum + item.quantity, 0)}
+                  </span>
+                )}
+              </Button>
+            }
+          />
+          <SheetContent className="w-full sm:max-w-md rounded-l-[3rem] border-none shadow-2xl p-0 flex flex-col">
+            <SheetHeader className="p-10 pb-6">
+              <SheetTitle className="text-3xl font-black uppercase italic tracking-tighter flex items-center gap-3">
+                Your Bag <ShoppingBag className="h-8 w-8" />
+              </SheetTitle>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 italic">Review your items before ordering</p>
+            </SheetHeader>
+
+            <ScrollArea className="flex-1 px-10">
+              {cartItems.length === 0 ? (
+                <div className="py-20 text-center opacity-20">
+                  <ShoppingBag className="h-20 w-20 mx-auto mb-4" />
+                  <p className="font-black uppercase italic tracking-widest text-xs">Your bag is empty</p>
+                </div>
+              ) : (
+                <div className="space-y-8 pb-10">
+                  {cartItems.map(item => (
+                    <div key={item.id} className="group relative flex items-center gap-6 p-4 rounded-3xl hover:bg-zinc-50 transition-all border border-transparent hover:border-zinc-100">
+                      <div className="h-20 w-20 rounded-2xl overflow-hidden bg-zinc-100 flex-shrink-0">
+                        <img src={item.imageUrl} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <Badge className="bg-zinc-100 text-zinc-900 text-[8px] font-black uppercase tracking-widest rounded-lg px-2 mb-1">
+                          {item.supplierName}
+                        </Badge>
+                        <h5 className="font-black uppercase italic tracking-tight truncate text-sm">{item.name}</h5>
+                        <p className="text-xs font-black text-zinc-500 mt-0.5">{formatCurrency(item.price, item.currency)} / unit</p>
+                        
+                        <div className="flex items-center gap-3 mt-3">
+                          <div className="flex items-center bg-white rounded-xl border border-zinc-100 shadow-sm overflow-hidden">
+                            <button 
+                              onClick={() => updateCartQuantity(item.id, -1)}
+                              className="px-3 py-1 hover:bg-zinc-50 text-zinc-400 hover:text-zinc-900 transition-colors"
+                            >
+                              <Minus className="h-3 w-3" />
+                            </button>
+                            <span className="w-8 text-center text-[10px] font-black">{item.quantity}</span>
+                            <button 
+                              onClick={() => updateCartQuantity(item.id, 1)}
+                              className="px-3 py-1 hover:bg-zinc-50 text-zinc-400 hover:text-zinc-900 transition-colors"
+                            >
+                              <Plus className="h-3 w-3" />
+                            </button>
+                          </div>
+                          <button 
+                            onClick={() => removeFromCart(item.id)}
+                            className="text-zinc-300 hover:text-red-500 transition-colors p-1"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-black italic text-sm tracking-tighter">
+                          {formatCurrency(item.price * item.quantity, item.currency)}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </ScrollArea>
+
+            <div className="p-10 bg-zinc-50 border-t border-zinc-100">
+              <div className="space-y-4 mb-8">
+                <div className="flex justify-between items-center text-zinc-500">
+                  <span className="text-[10px] font-black uppercase tracking-widest">Subtotal</span>
+                  <span className="text-sm font-black italic">
+                    {formatCurrency(cartTotal, cartCurrency)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-zinc-900 pt-4 border-t border-zinc-200">
+                  <span className="text-[10px] font-black uppercase tracking-widest">Total Amount</span>
+                  <span className="text-2xl font-black italic tracking-tighter">
+                    {formatCurrency(cartTotal, cartCurrency)}
+                  </span>
+                </div>
+              </div>
+              <Button 
+                disabled={cartItems.length === 0 || isSubmitting}
+                onClick={handleCheckout}
+                className="w-full h-16 rounded-[2rem] bg-zinc-900 text-white font-black uppercase italic tracking-widest text-sm hover:scale-[1.02] transition-all shadow-2xl disabled:opacity-50"
+              >
+                {isSubmitting ? (
+                  <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Processing Orders...</>
+                ) : (
+                  <>Place Combined Order <ShoppingBag className="ml-3 h-5 w-5" /></>
+                )}
+              </Button>
+              <p className="mt-4 text-[8px] font-black uppercase tracking-[0.2em] text-zinc-400 text-center leading-relaxed italic">
+                Orders will be grouped by supplier and placed separately.
+              </p>
+            </div>
+          </SheetContent>
+        </Sheet>
       </div>
 
       <div className="flex flex-col lg:flex-row gap-6">
@@ -191,10 +395,10 @@ export const RetailerMarketplace: React.FC<RetailerMarketplaceProps> = ({ initia
                 </div>
                 <div className="mt-8 pt-6 border-t border-zinc-100 flex items-center justify-between gap-4">
                    <Button 
-                    onClick={() => { setSelectedProduct(product); setIsOrderOpen(true); }}
+                    onClick={() => addToCart(product)}
                     className="w-full rounded-2xl h-12 font-black uppercase italic tracking-widest bg-zinc-900 text-white hover:bg-zinc-800 transition-all text-[10px]"
                    >
-                     Order Product <ShoppingCart className="ml-2 h-4 w-4" />
+                     Add to Bag <Plus className="ml-2 h-4 w-4" />
                    </Button>
                 </div>
               </CardContent>
@@ -209,95 +413,7 @@ export const RetailerMarketplace: React.FC<RetailerMarketplaceProps> = ({ initia
         </div>
       )}
 
-      {/* Order Modal */}
-      <Dialog open={isOrderOpen} onOpenChange={setIsOrderOpen}>
-        <DialogContent className="w-[95vw] sm:max-w-[500px] rounded-[2rem] md:rounded-[2.5rem] p-6 md:p-10 border-none shadow-2xl">
-        {selectedProduct && (
-          <form onSubmit={handlePlaceOrder}>
-            <DialogHeader>
-              <DialogTitle className="text-xl md:text-2xl font-black uppercase italic tracking-tighter">Place Order</DialogTitle>
-              <DialogDescription className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 leading-relaxed">
-                Order units from {selectedProduct.supplierName}
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="space-y-6 md:space-y-8 py-6 md:py-10">
-              <div className="flex items-center gap-4 md:gap-6 p-4 md:p-6 rounded-[2rem] bg-zinc-50 border border-zinc-100">
-                <div className="h-16 w-16 md:h-20 md:w-20 rounded-2xl overflow-hidden bg-white shadow-sm flex-shrink-0">
-                  <img src={selectedProduct.imageUrl} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                </div>
-                <div className="min-w-0">
-                  <h5 className="font-black uppercase italic tracking-tight truncate">{selectedProduct.name}</h5>
-                  <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">{formatCurrency(selectedProduct.price, selectedProduct.currency)} / unit</p>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <div className="flex justify-between items-center mb-1">
-                  <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Order Quantity</Label>
-                  <span className="text-[10px] font-black uppercase tracking-widest text-zinc-900 border-b-2 border-zinc-900 pb-0.5">{quantity} UNITS</span>
-                </div>
-                <div className="flex items-center gap-2 md:gap-4">
-                   <Button 
-                      type="button" 
-                      variant="ghost" 
-                      className="h-12 w-12 md:h-16 md:w-16 rounded-2xl bg-zinc-100 font-black text-lg md:text-xl hover:bg-zinc-200"
-                      onClick={() => setQuantity(q => Math.max(1, q - 1))}
-                   >
-                     -
-                   </Button>
-                   <Input 
-                      type="number"
-                      min="1"
-                      value={quantity}
-                      onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
-                      className="h-12 md:h-16 rounded-2xl bg-zinc-50 border-none font-black text-center text-lg md:text-xl"
-                   />
-                   <Button 
-                      type="button" 
-                      variant="ghost" 
-                      className="h-12 w-12 md:h-16 md:w-16 rounded-2xl bg-zinc-100 font-black text-lg md:text-xl hover:bg-zinc-200"
-                      onClick={() => setQuantity(q => q + 1)}
-                   >
-                     +
-                   </Button>
-                </div>
-              </div>
-
-              <div className="p-6 md:p-8 rounded-[2rem] bg-zinc-900 text-white flex justify-between items-center shadow-2xl">
-                <div className="space-y-1">
-                  <p className="text-[8px] font-black uppercase tracking-[0.3em] opacity-50 italic">Total Amount</p>
-                  <p className="text-2xl md:text-3xl font-black italic tracking-tighter">{formatCurrency(selectedProduct.price * quantity, selectedProduct.currency)}</p>
-                </div>
-                <div className="h-10 w-10 md:h-12 md:w-12 rounded-xl bg-white/10 flex items-center justify-center">
-                  <Package className="h-5 w-5 md:h-6 md:w-6 text-zinc-400" />
-                </div>
-              </div>
-            </div>
-
-            <DialogFooter className="flex-col sm:flex-row sm:justify-between gap-3">
-              <Button 
-                type="button" 
-                variant="ghost" 
-                onClick={() => setIsOrderOpen(false)}
-                className="rounded-2xl h-12 md:h-14 font-black uppercase tracking-widest text-[10px] w-full sm:w-auto"
-              >
-                Cancel
-              </Button>
-              <Button 
-                type="submit" 
-                disabled={isSubmitting}
-                className="rounded-2xl h-12 md:h-14 px-8 flex-1 font-black uppercase italic tracking-widest bg-zinc-900 text-white shadow-xl hover:scale-[1.02] transition-all w-full sm:w-auto"
-              >
-                {isSubmitting ? (
-                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing...</>
-                ) : "Confirm Order"}
-              </Button>
-            </DialogFooter>
-          </form>
-        )}
-      </DialogContent>
-      </Dialog>
+      {/* Order Modal removed in favor of Cart */}
     </div>
   );
 };

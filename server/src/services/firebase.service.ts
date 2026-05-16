@@ -11,7 +11,7 @@ export function getFirebaseAdmin() {
     return firebaseAdmin;
   }
 
-  const projectId = process.env.FIREBASE_PROJECT_ID?.trim();
+  const projectId = process.env.FIREBASE_PROJECT_ID?.trim() || "gen-lang-client-0795000146";
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL?.trim();
   let privateKey = process.env.FIREBASE_PRIVATE_KEY;
 
@@ -79,7 +79,7 @@ export const db = () => {
     return null;
   }
   
-  const databaseId = process.env.FIREBASE_DATABASE_ID?.trim();
+  const databaseId = process.env.FIREBASE_DATABASE_ID?.trim() || "ai-studio-e6834286-adbf-40a0-93ff-4b740a82ae6e";
   try {
     // If databaseId is empty or is "(default)", use the default getFirestore(app) call
     const effectiveDbId = (databaseId && databaseId !== "(default)") ? databaseId : undefined;

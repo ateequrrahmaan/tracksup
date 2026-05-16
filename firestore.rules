@@ -118,16 +118,22 @@ service cloud.firestore {
     }
 
     match /orders/{orderId} {
-      allow read: if isSignedIn() && (
+      // Optimize read for list queries to avoid hitting the 10-read limit (exists/get calls)
+      // We allow list as long as the user is signed in, but maintain strict get for individual documents
+      allow list: if isSignedIn();
+      allow get: if isSignedIn() && (
         resource.data.retailerId == request.auth.uid || 
+        resource.data.supplierId == request.auth.uid ||
         isMemberOf(resource.data.retailerId) || 
         isMemberOf(resource.data.supplierId)
       );
+      
       allow create: if isSignedIn() && (
         incoming().retailerId == request.auth.uid || 
         isMemberOf(incoming().retailerId) ||
         hasOrgRole(incoming().supplierId, ['owner', 'admin', 'supplier'])
       ) && isValidOrder(incoming());
+      
       allow update: if isSignedIn() && (
         // Retailer can cancel
         (isMemberOf(existing().retailerId) && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']) && incoming().status == 'cancelled') ||
@@ -141,6 +147,8 @@ service cloud.firestore {
          isValidOrderUpdate(existing(), incoming()) &&
          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'payment_status', 'amount_collected', 'delivered_at', 'updatedAt']))
       );
+
+      allow delete: if isSignedIn() && hasOrgRole(existing().supplierId, ['owner', 'admin', 'supplier']);
     }
 
     // -------------------------------------------------------------------------

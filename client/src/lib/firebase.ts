@@ -13,14 +13,14 @@ const getCfg = (envKey: string, defaultValue?: string) => {
 
 const rawDbId = getCfg("VITE_FIREBASE_DATABASE_ID");
 const firebaseConfig = {
-  apiKey: getCfg("VITE_FIREBASE_API_KEY"),
-  authDomain: getCfg("VITE_FIREBASE_AUTH_DOMAIN"),
-  projectId: getCfg("VITE_FIREBASE_PROJECT_ID"),
-  storageBucket: getCfg("VITE_FIREBASE_STORAGE_BUCKET"),
-  messagingSenderId: getCfg("VITE_FIREBASE_MESSAGING_SENDER_ID"),
-  appId: getCfg("VITE_FIREBASE_APP_ID"),
-  measurementId: getCfg("VITE_FIREBASE_MEASUREMENT_ID"),
-  firestoreDatabaseId: (rawDbId && rawDbId !== "(default)") ? rawDbId : undefined
+  apiKey: getCfg("VITE_FIREBASE_API_KEY", "AIzaSyAhb5qBe5TN6PPFAj6uObit-gagK2sQbfs"),
+  authDomain: getCfg("VITE_FIREBASE_AUTH_DOMAIN", "gen-lang-client-0795000146.firebaseapp.com"),
+  projectId: getCfg("VITE_FIREBASE_PROJECT_ID", "gen-lang-client-0795000146"),
+  storageBucket: getCfg("VITE_FIREBASE_STORAGE_BUCKET", "gen-lang-client-0795000146.firebasestorage.app"),
+  messagingSenderId: getCfg("VITE_FIREBASE_MESSAGING_SENDER_ID", "687283701870"),
+  appId: getCfg("VITE_FIREBASE_APP_ID", "1:687283701870:web:19e1a6c002016467cafe7f"),
+  measurementId: getCfg("VITE_FIREBASE_MEASUREMENT_ID", ""),
+  firestoreDatabaseId: (rawDbId && rawDbId !== "(default)") ? rawDbId : "ai-studio-e6834286-adbf-40a0-93ff-4b740a82ae6e"
 };
 
 // Diagnostic log for configuration issues

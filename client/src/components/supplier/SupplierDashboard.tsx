@@ -93,11 +93,20 @@ export const SupplierDashboard = () => {
 
     const ordersQuery = query(collection(db, "orders"), where("supplierId", "==", activeOrg.id));
     const unsubscribeOrders = onSnapshot(ordersQuery, (snapshot) => {
+      console.log(`[SupplierDashboard] Fetched ${snapshot.size} orders for supplier ${activeOrg.id}`);
       const uniqueOrders = new Map<string, Order>();
       snapshot.docs.forEach(doc => {
         uniqueOrders.set(doc.id, { id: doc.id, ...doc.data() } as Order);
       });
-      setOrders(Array.from(uniqueOrders.values()));
+      
+      const docs = Array.from(uniqueOrders.values());
+      // Sort in memory by createdAt desc
+      docs.sort((a, b) => {
+        const timeA = a.createdAt?.toDate?.()?.getTime() || (a.createdAt ? new Date(a.createdAt as any).getTime() : 0);
+        const timeB = b.createdAt?.toDate?.()?.getTime() || (b.createdAt ? new Date(b.createdAt as any).getTime() : 0);
+        return timeB - timeA;
+      });
+      setOrders(docs);
     }, (error) => {
        handleFirestoreError(error, OperationType.GET, "orders");
     });
@@ -351,6 +360,26 @@ export const SupplierDashboard = () => {
     }
   };
 
+  const handleDeleteOrder = async (orderId: string) => {
+    console.log(`[SupplierDashboard] handleDeleteOrder CRITICAL ACTION for: ${orderId}`);
+    const toastId = toast.loading("Purging manifest from system...");
+    try {
+      // Optimistic state update or at least immediate feedback
+      await api.delete(`/orders/${encodeURIComponent(orderId)}`);
+      
+      console.log(`[SupplierDashboard] API confirmed deletion for: ${orderId}`);
+      
+      // Force local filter as fallback to onSnapshot
+      setOrders(prev => prev.filter(o => o.id !== orderId));
+      
+      toast.success("Manifest purged from system.", { id: toastId });
+    } catch (error: any) {
+      console.error(`[SupplierDashboard] Deletion failed for ${orderId}:`, error);
+      const errorMsg = error.response?.data?.error?.message || error.response?.data?.message || "Purge failure.";
+      toast.error(`Purge failure: ${errorMsg}`, { id: toastId });
+    }
+  };
+
   const assignEmployee = async (orderId: string, employeeId: string) => {
     try {
       const empName = employees.find(e => e.uid === employeeId)?.name || "";
@@ -430,6 +459,7 @@ export const SupplierDashboard = () => {
             onOrderSelect={setSelectedOrderDetail}
             onPaymentStatusUpdate={updatePaymentStatus}
             onEmployeeAssign={assignEmployee}
+            onOrderDelete={handleDeleteOrder}
         />
       )}
       {activeTab === "outstanding" && (
@@ -454,6 +484,7 @@ export const SupplierDashboard = () => {
           employees={employees}
           onPaymentStatusUpdate={updatePaymentStatus}
           onEmployeeAssign={assignEmployee}
+          onOrderDelete={handleDeleteOrder}
         />
       )}
       {activeTab === "invites" && (

@@ -349,21 +349,34 @@ export const RetailerDashboard = () => {
   };
 
   useEffect(() => {
-    if (!user || !activeOrg) return;
+    if (!user) return;
 
-    const retailerIds = Array.from(new Set([user.uid, activeOrg.id].filter(Boolean)));
+    // We allow fetching orders even if no activeOrg is selected (personal orders)
+    const retailerIds = Array.from(new Set([user.uid, activeOrg?.id].filter(Boolean) as string[]));
+    
+    // Fallback if no retailerIds (shouldn't happen if user exists)
+    if (retailerIds.length === 0) return;
+
     const ordersQuery = query(
       collection(db, "orders"), 
-      where("retailerId", "in", retailerIds),
-      orderBy("createdAt", "desc")
+      where("retailerId", "in", retailerIds)
     );
     
     const unsubscribe = onSnapshot(ordersQuery, (snapshot) => {
+      console.log(`[RetailerDashboard] Fetched ${snapshot.size} orders for retailers:`, retailerIds);
       const uniqueOrders = new Map<string, Order>();
       snapshot.docs.forEach(doc => {
         uniqueOrders.set(doc.id, { id: doc.id, ...doc.data() } as Order);
       });
-      setOrders(Array.from(uniqueOrders.values()));
+      
+      const docs = Array.from(uniqueOrders.values());
+      // Sort in memory by createdAt desc
+      docs.sort((a, b) => {
+        const timeA = a.createdAt?.toDate?.()?.getTime() || (a.createdAt ? new Date(a.createdAt as any).getTime() : 0);
+        const timeB = b.createdAt?.toDate?.()?.getTime() || (b.createdAt ? new Date(b.createdAt as any).getTime() : 0);
+        return timeB - timeA;
+      });
+      setOrders(docs);
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, "orders");
     });
