@@ -1,5 +1,6 @@
 import React from "react";
 import { Invite } from "@/types";
+import { safeFormat } from "@/lib/utils";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -60,7 +61,7 @@ export const SupplierInvites: React.FC<SupplierInvitesProps> = ({
                    </Badge>
                 </TableCell>
                 <TableCell className="px-12 font-bold text-zinc-500 text-xs italic uppercase tracking-tighter">
-                  {invite.expiresAt?.toDate ? format(invite.expiresAt.toDate(), 'PP p') : 'Syncing...'}
+                  {safeFormat(invite.expiresAt, 'PP p', 'Syncing...')}
                 </TableCell>
                 <TableCell className="px-12 text-right">
                   <div className="flex justify-end gap-4">

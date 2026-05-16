@@ -34,6 +34,18 @@ export const deliverOrder = async (req: AuthRequest, res: Response) => {
   }
 };
 
+export const updateStatus = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.orgId) return sendError(res, "Org ID missing", 400);
+    const { id } = req.params;
+    const { status } = req.body;
+    const result = await orderService.updateOrderStatus(id, req.orgId, status, req.user.uid);
+    sendSuccess(res, result);
+  } catch (error: any) {
+    sendError(res, error.message);
+  }
+};
+
 export const createOrder = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.orgId) return sendError(res, "Org ID missing", 400);
@@ -41,15 +53,13 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
     
     if (!supplierId) return sendError(res, "Supplier ID missing", 400);
 
-    const finalRetailerId = retailerId || req.user.uid;
-
     const order = await orderService.createOrder(req.orgId, supplierId, {
       ...req.body,
-      retailerId: req.orgId,
       userId: req.user.uid
     });
     sendSuccess(res, order, "Order created", 201);
   } catch (error: any) {
+    console.error("CreateOrder Controller Error:", error);
     sendError(res, error.message);
   }
 };

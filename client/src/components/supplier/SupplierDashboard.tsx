@@ -189,12 +189,19 @@ export const SupplierDashboard = () => {
       
       let deliveryTimeUpdate = {};
       if (o.status === 'delivered' && o.delivered_at && o.createdAt) {
-          const created = o.createdAt.toDate().getTime();
-          const delivered = new Date(o.delivered_at).getTime();
-          const hours = (delivered - created) / (1000 * 60 * 60);
-          deliveryTimeUpdate = { 
-            avgTime: current.avgTime !== undefined ? (current.avgTime + hours) / 2 : hours 
-          };
+          try {
+            const created = typeof o.createdAt === 'object' && 'toDate' in o.createdAt ? o.createdAt.toDate().getTime() : new Date(o.createdAt).getTime();
+            const delivered = typeof o.delivered_at === 'object' && o.delivered_at !== null && 'toDate' in o.delivered_at ? o.delivered_at.toDate().getTime() : new Date(o.delivered_at).getTime();
+            
+            if (!isNaN(created) && !isNaN(delivered)) {
+              const hours = (delivered - created) / (1000 * 60 * 60);
+              deliveryTimeUpdate = { 
+                avgTime: current.avgTime !== undefined ? (current.avgTime + hours) / 2 : hours 
+              };
+            }
+          } catch (e) {
+            console.warn("Stats delivery calc error:", e);
+          }
       }
 
       employeeMap.set(o.employeeId, {
@@ -220,13 +227,19 @@ export const SupplierDashboard = () => {
 
     orders.forEach(o => {
       if (!o.createdAt) return;
-      const date = o.createdAt.toDate();
-      const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
-      if (diffDays <= 7) {
-        const dayName = days[date.getDay()];
-        if (trendMap.has(dayName)) {
-           trendMap.set(dayName, (trendMap.get(dayName) || 0) + o.totalAmount);
+      try {
+        const date = typeof o.createdAt === 'object' && 'toDate' in o.createdAt ? o.createdAt.toDate() : new Date(o.createdAt);
+        if (isNaN(date.getTime())) return;
+        
+        const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+        if (diffDays <= 7) {
+          const dayName = days[date.getDay()];
+          if (trendMap.has(dayName)) {
+             trendMap.set(dayName, (trendMap.get(dayName) || 0) + o.totalAmount);
+          }
         }
+      } catch (e) {
+        console.warn("Trend calc error:", e);
       }
     });
 
@@ -250,10 +263,19 @@ export const SupplierDashboard = () => {
 
     // Efficiency Calculation
     const deliveredOrders = orders.filter(o => o.status === 'delivered' && o.delivered_at);
-    const avgDeliveryHours = deliveredOrders.length > 0
+      const avgDeliveryHours = deliveredOrders.length > 0
       ? deliveredOrders.reduce((acc, o) => {
-          const hours = (new Date(o.delivered_at!).getTime() - o.createdAt.toDate().getTime()) / (1000 * 60 * 60);
-          return acc + hours;
+          try {
+            const deliveredTime = typeof o.delivered_at === 'object' && o.delivered_at !== null && 'toDate' in o.delivered_at ? o.delivered_at.toDate().getTime() : new Date(o.delivered_at).getTime();
+            const createdTime = typeof o.createdAt === 'object' && o.createdAt !== null && 'toDate' in o.createdAt ? o.createdAt.toDate().getTime() : new Date(o.createdAt).getTime();
+            
+            if (isNaN(deliveredTime) || isNaN(createdTime)) return acc;
+            
+            const hours = (deliveredTime - createdTime) / (1000 * 60 * 60);
+            return acc + hours;
+          } catch (e) {
+            return acc;
+          }
         }, 0) / deliveredOrders.length
       : 0;
 
@@ -288,8 +310,10 @@ export const SupplierDashboard = () => {
       });
       setIsNewOrderOpen(false);
       toast.success("Manifest active - Logistics vector initialized.");
-    } catch (error) {
-      toast.error("Signal failure. Manifest rejected.");
+    } catch (error: any) {
+      console.error("Order creation error:", error);
+      const message = error.response?.data?.error?.message || "Signal failure. Manifest rejected.";
+      toast.error(message);
     }
   };
 

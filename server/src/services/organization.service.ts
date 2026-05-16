@@ -1,4 +1,5 @@
 import admin from "firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 import { db } from "../services/firebase.service.js";
 
 export const createOrganization = async (orgData: any) => {
@@ -132,7 +133,7 @@ export const createInvite = async (orgId: string, orgName: string, userId: strin
     token,
     status: "pending",
     invitedBy: userId,
-    createdAt: admin.firestore.FieldValue.serverTimestamp()
+    createdAt: FieldValue.serverTimestamp()
   };
   
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);

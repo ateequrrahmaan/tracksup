@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { db, handleFirestoreError, OperationType } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, orderBy } from "firebase/firestore";
 import { useAuth } from "@/lib/auth-context";
+import { safeFormat } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -127,7 +128,7 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ order, isOpen, onOp
             </div>
             <div className="space-y-1">
               <p className="text-[10px] font-bold text-zinc-600 uppercase">Delivery Info</p>
-              <p className="text-sm font-semibold">Date: {order.delivered_at ? format(new Date(order.delivered_at), 'PPP') : 'Not yet'}</p>
+              <p className="text-sm font-semibold">Date: {order.delivered_at ? safeFormat(order.delivered_at, 'PPP', 'Not yet') : 'Not yet'}</p>
               <p className="text-sm text-zinc-700">Agent: {order.employeeName || (order.employeeId ? `Agent ${order.employeeId.slice(-4).toUpperCase()}` : 'Assigned')}</p>
             </div>
           </div>
@@ -692,7 +693,7 @@ export const RetailerDashboard = () => {
                           </p>
                           <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">
                             { (order as any).supplierName || organizations[order.supplierId || ""]?.name || fetchedOrgs[order.supplierId || ""] ? `Manifest #${order.id.slice(-8).toUpperCase()} • ` : "" }
-                            {order.delivered_at ? format(new Date(order.delivered_at), 'PPP') : 'Delivered'}
+                            {order.delivered_at ? safeFormat(order.delivered_at, 'PPP', 'Delivered') : 'Delivered'}
                           </p>
                         </div>
                       </div>

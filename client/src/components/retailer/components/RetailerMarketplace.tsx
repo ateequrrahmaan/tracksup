@@ -20,7 +20,7 @@ interface RetailerMarketplaceProps {
 }
 
 export const RetailerMarketplace: React.FC<RetailerMarketplaceProps> = ({ initialSupplierId }) => {
-  const { memberships, activeOrg, user } = useAuth();
+  const { memberships, activeOrg, user, activeRole } = useAuth();
   const [products, setProducts] = useState<(Product & { supplierName: string })[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -73,11 +73,18 @@ export const RetailerMarketplace: React.FC<RetailerMarketplaceProps> = ({ initia
 
     setIsSubmitting(true);
     try {
+      // Determine retailerId: 
+      // 1. If we are active in an organization that IS the supplier, we use user.uid (connected retailer role)
+      // 2. Otherwise use the activeOrg.id (treating it as our own retailer organization)
+      const isMemberOfSupplier = activeOrg?.id === selectedProduct.supplierId;
+      const retailerId = isMemberOfSupplier ? user.uid : (activeOrg?.id || user.uid);
+      const retailerName = isMemberOfSupplier ? user.name : (activeOrg?.name || user.name);
+
       await api.post("/orders", {
         supplierId: selectedProduct.supplierId, 
         supplierName: selectedProduct.supplierName,
-        retailerId: activeOrg.id,
-        retailerName: activeOrg.name, 
+        retailerId,
+        retailerName, 
         totalAmount: selectedProduct.price * quantity,
         currency: selectedProduct.currency,
         items: [{
@@ -92,9 +99,10 @@ export const RetailerMarketplace: React.FC<RetailerMarketplaceProps> = ({ initia
       toast.success("Order placed successfully. Awaiting supplier approval.");
       setIsOrderOpen(false);
       setQuantity(1);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error placing order:", error);
-      toast.error("Failed to place order.");
+      const message = error.response?.data?.error?.message || "Failed to place order.";
+      toast.error(message);
     } finally {
       setIsSubmitting(false);
     }

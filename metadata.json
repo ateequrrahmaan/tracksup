@@ -6,10 +6,6 @@
     "geolocation"
   ],
   "majorCapabilities": [
-    "Supply Chain Management",
-    "Order Tracking",
-    "Digital Invoicing",
-    "Supplier-Retailer Network",
-    "Employee Management"
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
   ]
 }

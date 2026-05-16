@@ -10,6 +10,7 @@ router.use(attachOrg);
 router.get("/", orderController.getOrders);
 router.post("/", orderController.createOrder);
 router.patch("/:id/deliver", orderController.deliverOrder);
+router.patch("/:id/status", orderController.updateStatus);
 router.patch("/:id/assign", orderController.assignOrder);
 router.patch("/:id/payment", orderController.updatePayment);
 

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { db, handleFirestoreError, OperationType } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, updateDoc, doc, serverTimestamp } from "firebase/firestore";
 import { useAuth } from "@/lib/auth-context";
+import { safeFormat } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -257,12 +258,11 @@ export const EmployeeDashboard = () => {
 
   const updateStatus = async (orderId: string, status: string) => {
     try {
-      await updateDoc(doc(db, "orders", orderId), {
-        status,
-        updatedAt: serverTimestamp()
-      });
+      // Use central API for complex state transitions
+      await api.patch(`/orders/${orderId}/status`, { status });
       toast.success(`Status updated to ${status.replace(/_/g, ' ')}`);
     } catch (error) {
+      console.error("Update status error:", error);
       toast.error("Failed to update status");
     }
   };
@@ -283,25 +283,18 @@ export const EmployeeDashboard = () => {
   const handleConfirmDelivery = async (data: { paymentStatus: string }) => {
     if (!selectedOrder) return;
     try {
-      await updateDoc(doc(db, "orders", selectedOrder.id), {
-        status: "delivered",
-        payment_status: data.paymentStatus,
-        amount_collected: selectedOrder.totalAmount,
-        delivered_at: new Date().toISOString(),
-        updatedAt: serverTimestamp()
-      });
-      
-      api.patch(`/orders/${selectedOrder.id}/deliver`, {
-        ...data,
-        amountCollected: selectedOrder.totalAmount
-      }).catch((err) => {
-        console.error("Secondary delivery update failed:", err);
+      // Use API for authoritative state change
+      await api.patch(`/orders/${selectedOrder.id}/deliver`, {
+        paymentStatus: data.paymentStatus,
+        amountCollected: selectedOrder.totalAmount,
+        userId: user!.uid
       });
 
       toast.success("Delivery confirmed!");
       setIsModalOpen(false);
       setSelectedOrder(null);
     } catch (error) {
+      console.error("Delivery confirmation error:", error);
       toast.error("Failed to confirm delivery");
     }
   };
@@ -491,18 +484,7 @@ export const EmployeeDashboard = () => {
                       <div>
                         <p className="text-sm font-black text-zinc-900 uppercase italic">{order.retailerName}</p>
                         <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest italic">
-                          {order.delivered_at 
-                            ? (() => {
-                                try {
-                                  const d = typeof order.delivered_at === 'object' && 'toDate' in order.delivered_at 
-                                    ? (order.delivered_at as any).toDate() 
-                                    : new Date(order.delivered_at);
-                                  return isNaN(d.getTime()) ? '...' : format(d, 'MMM d, HH:mm');
-                                } catch (e) {
-                                  return '...';
-                                }
-                              })()
-                            : '...'}
+                          {order.delivered_at ? safeFormat(order.delivered_at, 'MMM d, HH:mm') : '...'}
                         </p>
                       </div>
                     </div>
@@ -557,16 +539,7 @@ const TimelineItem = ({ icon, label, date, active }: { icon: React.ReactNode; la
      <div className="flex-1">
         <p className={`text-xs font-bold uppercase tracking-tight ${active ? 'text-zinc-900' : 'text-zinc-400'}`}>{label}</p>
         <p className="text-[10px] text-zinc-500">
-          {date 
-            ? (() => {
-                try {
-                  const d = typeof date === 'string' ? new Date(date) : (typeof date === 'object' && 'toDate' in date ? date.toDate() : new Date(date));
-                  return isNaN(d.getTime()) ? (typeof date === 'string' ? date : '...') : format(d, 'PP p');
-                } catch (e) {
-                  return typeof date === 'string' ? date : '...';
-                }
-              })()
-            : 'Waiting...'}
+          {date ? safeFormat(date, 'PP p') : (active ? 'Processing...' : 'Waiting...')}
         </p>
      </div>
   </div>

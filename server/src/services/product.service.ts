@@ -1,4 +1,5 @@
 import admin from "firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 import { db } from "./firebase.service.js";
 
 export const listProducts = async (supplierId: string) => {
@@ -21,8 +22,8 @@ export const createProduct = async (supplierId: string, data: any) => {
   const productData = {
     ...data,
     supplierId,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp()
   };
 
   const docRef = await firestore.collection("products").add(productData);
@@ -41,7 +42,7 @@ export const updateProduct = async (productId: string, supplierId: string, data:
 
   const productData = {
     ...data,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    updatedAt: FieldValue.serverTimestamp()
   };
 
   await docRef.update(productData);

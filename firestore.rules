@@ -108,7 +108,13 @@ service cloud.firestore {
       return data.supplierId is string &&
              data.retailerId is string &&
              data.totalAmount is number &&
-             data.status in ['pending', 'processing', 'shipped', 'delivered', 'cancelled'];
+             data.status in ['pending', 'assigned', 'out_for_delivery', 'delivered', 'cancelled'];
+    }
+
+    function isValidOrderUpdate(existingData, incomingData) {
+      return (incomingData.status == null || incomingData.status in ['pending', 'assigned', 'out_for_delivery', 'delivered', 'cancelled']) &&
+             (incomingData.payment_status == null || incomingData.payment_status in ['paid', 'unpaid', 'credit']) &&
+             (incomingData.amount_collected == null || incomingData.amount_collected is number);
     }
 
     match /orders/{orderId} {
@@ -117,12 +123,23 @@ service cloud.firestore {
         isMemberOf(resource.data.retailerId) || 
         isMemberOf(resource.data.supplierId)
       );
-      allow create: if isSignedIn() && (incoming().retailerId == request.auth.uid || isMemberOf(incoming().retailerId)) && isValidOrder(incoming());
+      allow create: if isSignedIn() && (
+        incoming().retailerId == request.auth.uid || 
+        isMemberOf(incoming().retailerId) ||
+        hasOrgRole(incoming().supplierId, ['owner', 'admin', 'supplier'])
+      ) && isValidOrder(incoming());
       allow update: if isSignedIn() && (
         // Retailer can cancel
         (isMemberOf(existing().retailerId) && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']) && incoming().status == 'cancelled') ||
-        // Supplier can update anything
-        (hasOrgRole(existing().supplierId, ['supplier', 'owner', 'admin', 'employee']) && isValidOrder(incoming()))
+        
+        // Supplier admin/owner can update everything
+        (hasOrgRole(existing().supplierId, ['supplier', 'owner', 'admin'])) ||
+        
+        // Employee can update status and delivery info if assigned
+        (hasOrgRole(existing().supplierId, ['employee']) && 
+         existing().employeeId == request.auth.uid &&
+         isValidOrderUpdate(existing(), incoming()) &&
+         incoming().diff(existing()).affectedKeys().hasOnly(['status', 'payment_status', 'amount_collected', 'delivered_at', 'updatedAt']))
       );
     }
 
