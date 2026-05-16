@@ -2,36 +2,30 @@ import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
-import localConfig from "../../../firebase-applet-config.json";
-
-// Prefer env variables for production, fallback to local config if not placeholders
-const isPlaceholder = (val: string) => !val || val.startsWith("PLACEHOLDER_");
-
-const getCfg = (envKey: keyof ImportMetaEnv, localVal: string) => {
+// Prefer env variables for production
+const getCfg = (envKey: string, defaultValue?: string) => {
   const envVal = import.meta.env[envKey] as string;
   const isEnvPlaceholder = !envVal || envVal.startsWith("PLACEHOLDER_");
-  const isLocalPlaceholder = !localVal || localVal.startsWith("PLACEHOLDER_");
-
+  
   if (!isEnvPlaceholder) return envVal;
-  if (!isLocalPlaceholder) return localVal;
-  return undefined;
+  return defaultValue;
 };
 
-const rawDbId = getCfg("VITE_FIREBASE_DATABASE_ID" as any, localConfig.firestoreDatabaseId);
+const rawDbId = getCfg("VITE_FIREBASE_DATABASE_ID");
 const firebaseConfig = {
-  apiKey: getCfg("VITE_FIREBASE_API_KEY", localConfig.apiKey),
-  authDomain: getCfg("VITE_FIREBASE_AUTH_DOMAIN", localConfig.authDomain),
-  projectId: getCfg("VITE_FIREBASE_PROJECT_ID", localConfig.projectId),
-  storageBucket: getCfg("VITE_FIREBASE_STORAGE_BUCKET", localConfig.storageBucket),
-  messagingSenderId: getCfg("VITE_FIREBASE_MESSAGING_SENDER_ID", localConfig.messagingSenderId),
-  appId: getCfg("VITE_FIREBASE_APP_ID", localConfig.appId),
-  measurementId: getCfg("VITE_FIREBASE_MEASUREMENT_ID" as any, localConfig.measurementId),
+  apiKey: getCfg("VITE_FIREBASE_API_KEY"),
+  authDomain: getCfg("VITE_FIREBASE_AUTH_DOMAIN"),
+  projectId: getCfg("VITE_FIREBASE_PROJECT_ID"),
+  storageBucket: getCfg("VITE_FIREBASE_STORAGE_BUCKET"),
+  messagingSenderId: getCfg("VITE_FIREBASE_MESSAGING_SENDER_ID"),
+  appId: getCfg("VITE_FIREBASE_APP_ID"),
+  measurementId: getCfg("VITE_FIREBASE_MEASUREMENT_ID"),
   firestoreDatabaseId: (rawDbId && rawDbId !== "(default)") ? rawDbId : undefined
 };
 
 // Diagnostic log for configuration issues
 if (!firebaseConfig.projectId || !firebaseConfig.apiKey) {
-  console.warn("[Firestore] WARNING: Missing or placeholder configuration detected. Local config:", localConfig);
+  console.warn("[Firestore] WARNING: Missing or placeholder configuration detected in environment variables.");
 }
 
 const app = initializeApp(firebaseConfig as any);
@@ -55,7 +49,7 @@ async function testConnection() {
       const hasPlaceholders = isPlaceholder(firebaseConfig.projectId) || isPlaceholder(firebaseConfig.apiKey);
       console.error("[Firestore] Database initialization issue encountered:", error.message);
       if (hasPlaceholders) {
-        console.error("[Firestore] CRITICAL: Placeholder values detected in firebase-applet-config.json. Please run the 'Setup Firebase' tool to provision a database.");
+        console.error("[Firestore] CRITICAL: Placeholder values detected in environment variables. Please check your .env file or deployment settings.");
       }
     }
   }
