@@ -2,11 +2,143 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>TracksUp | Manage and Track</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>TracksUp Terminal</title>
+    <style>
+      :root {
+        --sat: env(safe-area-inset-top, 0px);
+        --sab: env(safe-area-inset-bottom, 0px);
+      }
+      body {
+        padding-top: var(--sat);
+        padding-bottom: var(--sab);
+      }
+      /* Ensure the mobile nav and menu account for safe areas */
+      nav {
+        padding-top: var(--sat) !important;
+        height: calc(4rem + var(--sat)) !important;
+      }
+      @media (min-width: 768px) {
+        nav {
+          height: calc(5rem + var(--sat)) !important;
+        }
+      }
+      /* Theme Cycle Button for Mobile - Top Right */
+      #mobile-theme-fab {
+        position: fixed;
+        top: calc(12px + var(--sat));
+        right: 70px; /* Offset to not overlap the menu button */
+        z-index: 10000;
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+        background: rgba(16, 185, 129, 0.1);
+        backdrop-filter: blur(8px);
+        color: #10b981;
+        border: 1px solid rgba(16, 185, 129, 0.2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      #mobile-theme-fab:active {
+        transform: scale(0.9);
+      }
+      @media (min-width: 1024px) {
+        #mobile-theme-fab {
+          display: none;
+        }
+      }
+
+      /* Theme Contrast Overrides for Dark/Midnight */
+      body[data-theme='dark'] nav span.italic,
+      body[data-theme='midnight'] nav span.italic {
+        color: white !important;
+      }
+      
+      body[data-theme='dark'] h1,
+      body[data-theme='midnight'] h1 {
+        color: white !important;
+      }
+
+      body[data-theme='dark'] h1 span,
+      body[data-theme='midnight'] h1 span {
+        color: rgba(255, 255, 255, 0.15) !important;
+      }
+
+      body[data-theme='dark'] .absolute.italic.tracking-tighter.leading-none,
+      body[data-theme='midnight'] .absolute.italic.tracking-tighter.leading-none {
+        color: rgba(255, 255, 255, 0.05) !important;
+      }
+
+      body[data-theme='midnight'] p.transition-colors {
+        color: #94a3b8 !important; /* text-slate-400 */
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
+    <button id="mobile-theme-fab" aria-label="Cycle Theme">
+      <svg id="theme-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+    </button>
+    <script>
+      const themes = ['light', 'dark', 'cyber', 'midnight'];
+      const themeConfigs = {
+        light: { bg: 'rgba(24, 24, 27, 0.05)', color: '#18181b', border: 'rgba(24, 24, 27, 0.1)', icon: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41">' },
+        dark: { bg: 'rgba(255, 255, 255, 0.1)', color: '#ffffff', border: 'rgba(255, 255, 255, 0.2)', icon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z">' },
+        cyber: { bg: 'rgba(16, 185, 129, 0.1)', color: '#10b981', border: 'rgba(16, 185, 129, 0.2)', icon: '<path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5">' },
+        midnight: { bg: 'rgba(99, 102, 241, 0.1)', color: '#818cf8', border: 'rgba(99, 102, 241, 0.3)', icon: '<circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 3a9 9 0 1 0 9 9 9 9 0 0 0-9-9Z">' }
+      };
+
+      const fab = document.getElementById('mobile-theme-fab');
+      const icon = document.getElementById('theme-icon');
+
+      function updateFabStyle(theme) {
+        const config = themeConfigs[theme] || themeConfigs.light;
+        fab.style.background = config.bg;
+        fab.style.color = config.color;
+        fab.style.borderColor = config.border;
+        icon.innerHTML = config.icon;
+        document.body.dataset.theme = theme;
+      }
+
+      // Sync with React's internal theme buttons if clicked manually
+      document.addEventListener('click', (e) => {
+        const btn = e.target.closest('button');
+        if (!btn) return;
+        
+        const text = btn.innerText.toLowerCase();
+        if (text.includes('standard') || text.includes('light')) updateFabStyle('light');
+        else if (text.includes('stealth') || text.includes('dark')) updateFabStyle('dark');
+        else if (text.includes('cyber')) updateFabStyle('cyber');
+        else if (text.includes('midnight')) updateFabStyle('midnight');
+      }, true);
+
+      // Initial state
+      updateFabStyle('light');
+
+      fab.onclick = () => {
+        const currentTheme = document.body.dataset.theme || 'light';
+        const nextIdx = (themes.indexOf(currentTheme) + 1) % themes.length;
+        const nextTheme = themes[nextIdx];
+        
+        updateFabStyle(nextTheme);
+        
+        // Try to find React's buttons and click them to update React state
+        const buttons = document.querySelectorAll('button');
+        for (const btn of buttons) {
+          const text = btn.innerText.toLowerCase();
+          const themeMatches = (nextTheme === 'light' && text.includes('standard')) || 
+                               (nextTheme === 'dark' && text.includes('stealth')) || 
+                               (text.includes(nextTheme));
+          if (themeMatches) {
+             btn.click();
+             break;
+          }
+        }
+      };
+    </script>
     <script type="module" src="./src/main.tsx"></script>
   </body>
 </html>

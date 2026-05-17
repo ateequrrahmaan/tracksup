@@ -289,59 +289,60 @@ export const LandingPage = () => {
             {isMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
         </div>
+      </nav>
 
-        {/* Mobile Menu */}
-        <motion.div 
-          initial={false}
-          animate={isMenuOpen ? { x: 0, opacity: 1 } : { x: "100%", opacity: 0 }}
-          transition={{ type: "spring", damping: 30, stiffness: 300 }}
-          className={`fixed inset-0 lg:hidden z-[90] flex flex-col p-6 pt-32 pb-10 overflow-y-auto transition-colors duration-700 ${currentTheme.bg}`}
-        >
-          <div className="space-y-8 flex flex-col items-center text-center">
-            {["Network", "Protocols", "Pricing", "Testimonials"].map((item) => (
-              <a 
-                key={item} 
-                href={`#${item.toLowerCase()}`} 
-                onClick={() => setIsMenuOpen(false)}
-                className={`text-3xl md:text-4xl font-black uppercase italic tracking-tighter transition-colors ${theme === 'cyber' ? 'text-emerald-500 hover:text-emerald-300' : 'text-zinc-900 hover:text-zinc-500'}`}
-              >
-                {item}
-              </a>
-            ))}
-            
-            <div className={`w-full h-[1px] my-4 ${theme === 'cyber' ? 'bg-emerald-500/10' : 'bg-zinc-100'}`} />
-            
-            <div className="space-y-6 w-full max-w-sm">
-              <p className="text-[10px] font-black uppercase tracking-[0.5em] text-zinc-500 italic">Select Theme</p>
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { id: 'light', icon: Sun, label: 'Standard' },
-                  { id: 'dark', icon: Moon, label: 'Stealth' },
-                  { id: 'cyber', icon: Terminal, label: 'Cyber' },
-                  { id: 'midnight', icon: Palette, label: 'Midnight' }
-                ].map((t) => (
-                  <button 
-                    key={t.id}
-                    onClick={() => setTheme(t.id as any)}
-                    className={`flex flex-col items-center gap-2 py-3 px-4 rounded-2xl border transition-all ${theme === t.id ? (theme === 'cyber' ? 'bg-emerald-500 border-emerald-500 text-black' : 'bg-zinc-900 border-zinc-900 text-white shadow-xl') : (theme === 'cyber' ? 'border-emerald-500/20 text-emerald-500' : 'border-zinc-200 text-zinc-600 hover:bg-zinc-50')}`}
-                  >
-                    <t.icon className="h-4 w-4" />
-                    <span className="text-[8px] font-black uppercase tracking-widest">{t.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="pt-6 w-full max-w-sm">
-              <Link to="/auth" onClick={() => setIsMenuOpen(false)} className="w-full">
-                <Button className={`w-full h-16 rounded-2xl font-black uppercase italic tracking-widest text-lg ${currentTheme.button}`}>
-                  Get Started
-                </Button>
-              </Link>
+      {/* Mobile Menu */}
+      <motion.div 
+        initial={false}
+        animate={isMenuOpen ? { x: 0, opacity: 1 } : { x: "100%", opacity: 0 }}
+        transition={{ type: "spring", damping: 30, stiffness: 300 }}
+        className={`fixed inset-0 lg:hidden z-[90] flex flex-col p-6 pt-32 pb-10 overflow-y-auto transition-colors duration-700 ${currentTheme.bg}`}
+      >
+        <div className="space-y-8 flex flex-col items-center text-center">
+          {["Network", "Protocols", "Pricing", "Testimonials"].map((item) => (
+            <a 
+              key={item} 
+              href={`#${item.toLowerCase()}`} 
+              onClick={() => setIsMenuOpen(false)}
+              className={`text-3xl md:text-4xl font-black uppercase italic tracking-tighter transition-colors ${theme === 'cyber' ? 'text-emerald-500 hover:text-emerald-300' : 'text-zinc-900 hover:text-zinc-500'}`}
+            >
+              {item}
+            </a>
+          ))}
+          
+          <div className={`w-full h-[1px] my-4 ${theme === 'cyber' ? 'bg-emerald-500/10' : 'bg-zinc-100'}`} />
+          
+          <div className="space-y-6 w-full max-w-sm">
+            <p className="text-[10px] font-black uppercase tracking-[0.5em] text-zinc-500 italic">Select Theme</p>
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { id: 'light', icon: Sun, label: 'Standard' },
+                { id: 'dark', icon: Moon, label: 'Stealth' },
+                { id: 'cyber', icon: Terminal, label: 'Cyber' },
+                { id: 'midnight', icon: Palette, label: 'Midnight' }
+              ].map((t) => (
+                <button 
+                  key={t.id}
+                  onClick={() => setTheme(t.id as any)}
+                  className={`flex flex-col items-center gap-2 py-3 px-4 rounded-2xl border transition-all ${theme === t.id ? (theme === 'cyber' ? 'bg-emerald-500 border-emerald-500 text-black' : 'bg-zinc-900 border-zinc-900 text-white shadow-xl') : (theme === 'cyber' ? 'border-emerald-500/20 text-emerald-500' : 'border-zinc-200 text-zinc-600 hover:bg-zinc-50')}`}
+                >
+                  <t.icon className="h-4 w-4" />
+                  <span className="text-[8px] font-black uppercase tracking-widest">{t.label}</span>
+                </button>
+              ))}
             </div>
           </div>
-        </motion.div>
-      </nav>
+
+          <div className="pt-6 w-full max-w-sm">
+            <Link to="/auth" onClick={() => setIsMenuOpen(false)} className="w-full">
+              <Button className={`w-full h-16 rounded-2xl font-black uppercase italic tracking-widest text-lg ${currentTheme.button}`}>
+                Get Started
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </motion.div>
+
 
       <main>
         {/* Hero Section */}
