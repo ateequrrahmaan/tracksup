@@ -204,6 +204,13 @@ export const LandingPage = () => {
     }
   };
 
+  const cycleTheme = () => {
+    const themeList: ('light' | 'dark' | 'cyber' | 'midnight')[] = ['light', 'dark', 'cyber', 'midnight'];
+    const currentIndex = themeList.indexOf(theme);
+    const nextIndex = (currentIndex + 1) % themeList.length;
+    setTheme(themeList[nextIndex]);
+  };
+
   const currentTheme = themes[theme];
 
   const containerVariants = {
@@ -232,47 +239,31 @@ export const LandingPage = () => {
           <div className={`h-8 w-8 md:h-10 md:w-10 rounded-lg md:rounded-xl flex items-center justify-center text-white shadow-lg rotate-3 transition-transform hover:rotate-0 ${theme === 'light' ? 'bg-zinc-900' : 'bg-emerald-500'}`}>
             <Package2 className="h-4 w-4 md:h-6 md:w-6" />
           </div>
-          <span className={`text-sm md:text-xl font-black uppercase tracking-tighter italic ${theme === 'cyber' ? 'text-emerald-500' : 'text-zinc-900'}`}>TracksUp</span>
+          <span className={`text-sm md:text-xl font-black uppercase tracking-tighter italic ${currentTheme.text}`}>TracksUp</span>
         </div>
 
         <div className="hidden lg:flex items-center gap-6">
-          <div className={`flex items-center p-1 rounded-full border transition-colors ${currentTheme.muted} ${theme === 'cyber' ? 'border-emerald-500/20' : 'border-zinc-200'}`}>
-            <button 
-              onClick={() => setTheme('light')}
-              className={`p-2 rounded-full transition-all ${theme === 'light' ? 'bg-zinc-900 text-white' : 'text-zinc-500 hover:text-zinc-700'}`}
-            >
-              <Sun className="h-4 w-4" />
-            </button>
-            <button 
-              onClick={() => setTheme('dark')}
-              className={`p-2 rounded-full transition-all ${theme === 'dark' ? 'bg-white text-zinc-900' : 'text-zinc-400 hover:text-zinc-200'}`}
-            >
-              <Moon className="h-4 w-4" />
-            </button>
-            <button 
-              onClick={() => setTheme('cyber')}
-              className={`p-2 rounded-full transition-all ${theme === 'cyber' ? 'bg-emerald-500 text-black' : 'text-emerald-600 hover:text-emerald-500'}`}
-            >
-              <Terminal className="h-4 w-4" />
-            </button>
-            <button 
-              onClick={() => setTheme('midnight')}
-              className={`p-2 rounded-full transition-all ${theme === 'midnight' ? 'bg-blue-600 text-white' : 'text-blue-400 hover:text-blue-200'}`}
-            >
-              <Palette className="h-4 w-4" />
-            </button>
-          </div>
-          <div className="w-[1px] h-6 bg-zinc-200 mx-2" />
           {["Network", "Protocols", "Pricing", "Testimonials"].map((item) => (
-            <a key={item} href={`#${item.toLowerCase()}`} className={`text-[10px] font-black uppercase tracking-[0.2em] transition-colors ${theme === 'cyber' ? 'text-emerald-600 hover:text-emerald-400' : 'text-zinc-500 hover:text-zinc-900'}`}>
+            <a key={item} href={`#${item.toLowerCase()}`} className={`text-[10px] font-black uppercase tracking-[0.2em] transition-colors hover:text-emerald-500 ${currentTheme.subText}`}>
               {item}
             </a>
           ))}
         </div>
         
         <div className="flex items-center gap-3 md:gap-4 relative z-[100]">
+          <button 
+            onClick={cycleTheme}
+            className={`flex items-center justify-center p-2 rounded-xl border transition-all hover:scale-105 active:scale-95 ${currentTheme.muted} ${theme === 'cyber' ? 'border-emerald-500/20 text-emerald-500' : theme === 'midnight' ? 'border-blue-900/40 text-blue-100' : theme === 'dark' ? 'border-zinc-800 text-zinc-100' : 'border-zinc-200 text-zinc-900'}`}
+            aria-label="Cycle Theme"
+          >
+            {theme === 'light' && <Sun className="h-5 w-5" />}
+            {theme === 'dark' && <Moon className="h-5 w-5" />}
+            {theme === 'cyber' && <Terminal className="h-5 w-5" />}
+            {theme === 'midnight' && <Palette className="h-5 w-5" />}
+          </button>
+
           <Link to="/auth" className="hidden lg:block">
-            <span className={`text-[10px] font-black uppercase tracking-widest transition-colors cursor-pointer mr-6 italic ${theme === 'cyber' ? 'text-emerald-600 hover:text-emerald-400' : 'text-zinc-500 hover:text-zinc-900'}`}>
+            <span className={`text-[10px] font-black uppercase tracking-widest transition-colors cursor-pointer mr-6 italic hover:text-emerald-500 ${currentTheme.subText}`}>
               Sign In
             </span>
           </Link>
@@ -304,13 +295,13 @@ export const LandingPage = () => {
               key={item} 
               href={`#${item.toLowerCase()}`} 
               onClick={() => setIsMenuOpen(false)}
-              className={`text-3xl md:text-4xl font-black uppercase italic tracking-tighter transition-colors ${theme === 'cyber' ? 'text-emerald-500 hover:text-emerald-300' : 'text-zinc-900 hover:text-zinc-500'}`}
+              className={`text-3xl md:text-4xl font-black uppercase italic tracking-tighter transition-colors hover:text-emerald-500 ${currentTheme.text}`}
             >
               {item}
             </a>
           ))}
           
-          <div className={`w-full h-[1px] my-4 ${theme === 'cyber' ? 'bg-emerald-500/10' : 'bg-zinc-100'}`} />
+          <div className={`w-full h-[1px] my-4 ${theme === 'cyber' ? 'bg-emerald-500/10' : theme === 'midnight' ? 'bg-blue-900/30' : 'bg-zinc-100'}`} />
           
           <div className="space-y-6 w-full max-w-sm">
             <p className="text-[10px] font-black uppercase tracking-[0.5em] text-zinc-500 italic">Select Theme</p>
@@ -358,7 +349,7 @@ export const LandingPage = () => {
             >
               <motion.div variants={itemVariants} className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full mb-8 md:mb-10 border transition-colors ${currentTheme.muted} ${theme === 'cyber' ? 'border-emerald-500/20' : 'border-zinc-200/80'}`}>
                 <span className={`h-2 w-2 rounded-full animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.5)] ${theme === 'midnight' ? 'bg-blue-500' : 'bg-emerald-500'}`}></span>
-                <span className={`text-[9px] md:text-[10px] font-black uppercase tracking-widest italic ${theme === 'cyber' ? 'text-emerald-500' : 'text-zinc-700'}`}>System Active • May 2026</span>
+                <span className={`text-[9px] md:text-[10px] font-black uppercase tracking-widest italic ${currentTheme.accent}`}>System Active • May 2026</span>
               </motion.div>
               
               <div className="relative mb-10 md:mb-12">
@@ -368,9 +359,9 @@ export const LandingPage = () => {
                 >
                   Supply <br />
                   Chain <br />
-                  <span className={`transition-colors ${theme === 'light' ? 'text-zinc-300/80' : theme === 'cyber' ? 'text-emerald-800/40' : 'text-zinc-800/50'}`}>Simplified.</span>
+                  <span className={`transition-colors ${theme === 'light' ? 'text-zinc-300/80' : theme === 'cyber' ? 'text-emerald-800/40' : theme === 'midnight' ? 'text-blue-900/40' : 'text-zinc-800/50'}`}>Simplified.</span>
                 </motion.h1>
-                <div className={`absolute -top-10 -left-2 md:-top-14 md:-left-14 text-6xl md:text-[13rem] font-black select-none -z-10 italic tracking-tighter leading-none pointer-events-none transition-colors ${theme === 'light' ? 'text-zinc-100/50' : theme === 'cyber' ? 'text-emerald-950/30' : 'text-zinc-900/40'}`}>
+                <div className={`absolute -top-10 -left-2 md:-top-14 md:-left-14 text-6xl md:text-[13rem] font-black select-none -z-10 italic tracking-tighter leading-none pointer-events-none transition-colors ${theme === 'light' ? 'text-zinc-100/50' : theme === 'cyber' ? 'text-emerald-950/30' : theme === 'midnight' ? 'text-blue-950/20' : 'text-zinc-900/40'}`}>
                   TRACK
                 </div>
               </div>
@@ -387,7 +378,7 @@ export const LandingPage = () => {
                     <ArrowRight className="ml-2 h-6 md:h-7 w-6 md:w-7 transition-transform group-hover:translate-x-1.5" />
                   </Button>
                 </Link>
-                <Button variant="outline" className={`w-full sm:w-auto h-16 md:h-20 px-10 md:px-14 rounded-2xl md:rounded-3xl font-black uppercase italic tracking-widest text-lg md:text-xl border-[2px] md:border-[3px] group transition-all ${theme === 'cyber' ? 'border-emerald-900/50 bg-transparent text-emerald-500 hover:bg-emerald-500/10 hover:border-emerald-500' : 'border-zinc-100 hover:border-zinc-900 bg-transparent hover:bg-zinc-50'}`}>
+                <Button variant="outline" className={`w-full sm:w-auto h-16 md:h-20 px-10 md:px-14 rounded-2xl md:rounded-3xl font-black uppercase italic tracking-widest text-lg md:text-xl border-[2px] md:border-[3px] group transition-all ${theme === 'cyber' ? 'border-emerald-900/50 bg-transparent text-emerald-500 hover:bg-emerald-500/10 hover:border-emerald-500' : theme === 'midnight' ? 'border-blue-900/40 text-blue-400 hover:border-blue-500 bg-transparent' : 'border-zinc-100 hover:border-zinc-900 bg-transparent hover:bg-zinc-50'}`}>
                   Documentation
                   <Database className="ml-2 h-5 md:h-6 w-5 md:w-6 opacity-50 group-hover:opacity-100 group-hover:rotate-12 transition-all" />
                 </Button>
@@ -844,6 +835,7 @@ export const LandingPage = () => {
             </p>
         </div>
       </footer>
+
     </div>
   );
 };
