@@ -1,5 +1,6 @@
 import React from "react";
 import { formatCurrency } from "@/constants";
+import { useAuth } from "@/lib/auth-context";
 import { Card, CardContent } from "@/components/ui/card";
 import { 
   DollarSign, 
@@ -18,10 +19,11 @@ interface SupplierOverviewProps {
 }
 
 export const SupplierOverview: React.FC<SupplierOverviewProps> = ({ stats }) => {
+  const { preferredCurrency } = useAuth();
   const cards = [
     { 
       label: "Gross Revenue", 
-      value: formatCurrency(stats.totalRevenue), 
+      value: formatCurrency(stats.totalRevenue, preferredCurrency), 
       sub: "+12.5% from last cycle", 
       icon: DollarSign, 
       color: "bg-zinc-900 text-white",
@@ -37,7 +39,7 @@ export const SupplierOverview: React.FC<SupplierOverviewProps> = ({ stats }) => 
     },
     { 
       label: "Unpaid Balance", 
-      value: formatCurrency(stats.outstandingAmount), 
+      value: formatCurrency(stats.outstandingAmount, preferredCurrency), 
       sub: "Risk level: Medium", 
       icon: AlertCircle, 
       color: "bg-white text-zinc-900",
@@ -48,9 +50,7 @@ export const SupplierOverview: React.FC<SupplierOverviewProps> = ({ stats }) => 
       value: `${stats.totalRevenue > 0 ? Math.round((stats.totalCollected / stats.totalRevenue) * 100) : 0}%`, 
       sub: "Performance goal: 95%", 
       icon: CheckCircle, 
-      color: "bg-white text-zinc-900",
-      trend: "up"
-    }
+    },
   ];
 
   return (
@@ -105,7 +105,7 @@ export const SupplierOverview: React.FC<SupplierOverviewProps> = ({ stats }) => 
               <div key={emp.name} className="space-y-2">
                 <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest">
                   <span className="text-zinc-600">{emp.name}</span>
-                  <span className="text-zinc-900">{formatCurrency(emp.collected)}</span>
+                  <span className="text-zinc-900">{formatCurrency(emp.collected, preferredCurrency)}</span>
                 </div>
                 <div className="h-2 w-full bg-zinc-50 rounded-full overflow-hidden">
                   <motion.div 
@@ -139,7 +139,7 @@ export const SupplierOverview: React.FC<SupplierOverviewProps> = ({ stats }) => 
                          <p className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">Retail Partner</p>
                       </div>
                    </div>
-                   <p className="text-xs font-black italic">{formatCurrency(ret.revenue)}</p>
+                   <p className="text-xs font-black italic">{formatCurrency(ret.revenue, preferredCurrency)}</p>
                 </div>
              ))}
           </div>

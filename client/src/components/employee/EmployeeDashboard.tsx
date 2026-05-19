@@ -182,7 +182,7 @@ const ManifestModal: React.FC<ManifestModalProps> = ({ order, onClose, onExecute
 import { useLocation } from "react-router-dom";
 
 export const EmployeeDashboard = () => {
-  const { user, activeOrg, memberships, switchOrg } = useAuth();
+  const { user, activeOrg, memberships, switchOrg, preferredCurrency } = useAuth();
   const location = useLocation();
 
   const activeTab = useMemo(() => {
@@ -346,7 +346,7 @@ export const EmployeeDashboard = () => {
               <Card className="bg-white border-none shadow-sm p-4 md:p-6 rounded-3xl group hover:scale-[1.02] transition-all">
                 <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-3">Collected Today</p>
                 <div className="flex items-end justify-between">
-                  <div className="text-3xl md:text-4xl font-black text-emerald-600 italic tracking-tighter">{formatCurrency(stats.collectedToday)}</div>
+                  <div className="text-3xl md:text-4xl font-black text-emerald-600 italic tracking-tighter">{formatCurrency(stats.collectedToday, preferredCurrency)}</div>
                   <div className="h-10 w-10 flex items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
                     <Calculator className="h-5 w-5" />
                   </div>
@@ -355,7 +355,7 @@ export const EmployeeDashboard = () => {
               <Card className="bg-white border-none shadow-sm p-4 md:p-6 rounded-3xl group hover:scale-[1.02] transition-all sm:col-span-2 lg:col-span-1">
                 <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-3">Uncollected</p>
                 <div className="flex items-end justify-between">
-                  <div className="text-3xl md:text-4xl font-black text-rose-500 italic tracking-tighter">{formatCurrency(stats.pendingCollection)}</div>
+                  <div className="text-3xl md:text-4xl font-black text-rose-500 italic tracking-tighter">{formatCurrency(stats.pendingCollection, preferredCurrency)}</div>
                   <div className="h-10 w-10 flex items-center justify-center rounded-xl bg-rose-50 text-rose-500">
                     <AlertCircle className="h-5 w-5" />
                   </div>

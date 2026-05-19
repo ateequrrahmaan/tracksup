@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { SystemUser, OrderItem } from "@/types";
+import { useAuth } from "@/lib/auth-context";
 import { CURRENCIES, getCurrencySymbol } from "@/constants";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -31,14 +32,19 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
   employees, 
   onSubmit 
 }) => {
+  const { preferredCurrency } = useAuth();
   const [orderItems, setOrderItems] = useState<OrderItem[]>([
     { name: "", quantity: 1, price: 0 }
   ]);
   const [selectedRetailerId, setSelectedRetailerId] = useState("");
   const [assignedEmployeeId, setAssignedEmployeeId] = useState("");
-  const [currency, setCurrency] = useState("USD");
+  const [currency, setCurrency] = useState(preferredCurrency || "USD");
   const [deliveryDate, setDeliveryDate] = useState(new Date().toISOString().split('T')[0]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (preferredCurrency) setCurrency(preferredCurrency);
+  }, [preferredCurrency]);
 
   const grandTotal = orderItems.reduce((sum, item) => sum + (item.quantity * item.price), 0);
   const currentSymbol = getCurrencySymbol(currency);

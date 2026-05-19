@@ -28,27 +28,37 @@ interface CartItem extends Product {
 }
 
 export const RetailerMarketplace: React.FC<RetailerMarketplaceProps> = ({ initialSupplierId }) => {
-  const { memberships, activeOrg, user, activeRole } = useAuth();
+  const { memberships, activeOrg, user, activeRole, preferredCurrency } = useAuth();
   const [products, setProducts] = useState<(Product & { supplierName: string })[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedSupplierId, setSelectedSupplierId] = useState(initialSupplierId || activeOrg?.id || "all");
   const [suppliers, setSuppliers] = useState<{id: string, name: string}[]>([]);
-  const [cart, setCart] = useState<Record<string, CartItem>>(() => {
-    try {
-      const savedCart = localStorage.getItem("tracksup_cart");
-      return savedCart ? JSON.parse(savedCart) : {};
-    } catch (e) {
-      console.error("Failed to parse cart from localStorage:", e);
-      return {};
-    }
-  });
-  const [isCartOpen, setIsCartOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [cart, setCart] = useState<Record<string, CartItem>>({});
+  const cartKey = user ? `tracksup_cart_${user.uid}_${activeOrg?.id || 'personal'}` : null;
+  const loadedKeyRef = React.useRef<string | null>(null);
 
   useEffect(() => {
-    localStorage.setItem("tracksup_cart", JSON.stringify(cart));
-  }, [cart]);
+    if (cartKey) {
+      try {
+        const savedCart = localStorage.getItem(cartKey);
+        setCart(savedCart ? JSON.parse(savedCart) : {});
+        loadedKeyRef.current = cartKey;
+      } catch (e) {
+        console.error("Failed to parse cart from localStorage:", e);
+        setCart({});
+      }
+    }
+  }, [cartKey]);
+
+  useEffect(() => {
+    if (cartKey && loadedKeyRef.current === cartKey) {
+      localStorage.setItem(cartKey, JSON.stringify(cart));
+    }
+  }, [cart, cartKey]);
+
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     fetchConnectedProducts();
@@ -126,7 +136,7 @@ export const RetailerMarketplace: React.FC<RetailerMarketplaceProps> = ({ initia
 
   const cartItems: CartItem[] = Object.values(cart);
   const cartTotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  const cartCurrency = cartItems[0]?.currency || "KES";
+  const cartCurrency = cartItems[0]?.currency || preferredCurrency;
 
   const handleCheckout = async () => {
     console.log("[Marketplace] Attempting checkout", { cartItems, activeOrg, user });
@@ -191,7 +201,9 @@ export const RetailerMarketplace: React.FC<RetailerMarketplaceProps> = ({ initia
 
       toast.success("All orders placed successfully!");
       setCart({});
-      localStorage.removeItem("tracksup_cart");
+      if (cartKey) {
+        localStorage.removeItem(cartKey);
+      }
       setIsCartOpen(false);
     } catch (error: any) {
       console.error("Error placing orders:", error);
@@ -259,7 +271,7 @@ export const RetailerMarketplace: React.FC<RetailerMarketplaceProps> = ({ initia
                           {item.supplierName}
                         </Badge>
                         <h5 className="font-black uppercase italic tracking-tight truncate text-sm">{item.name}</h5>
-                        <p className="text-xs font-black text-zinc-500 mt-0.5">{formatCurrency(item.price, item.currency)} / unit</p>
+                        <p className="text-xs font-black text-zinc-500 mt-0.5">{formatCurrency(item.price, preferredCurrency)} / unit</p>
                         
                         <div className="flex items-center gap-3 mt-3">
                           <div className="flex items-center bg-white rounded-xl border border-zinc-100 shadow-sm overflow-hidden">
@@ -287,7 +299,7 @@ export const RetailerMarketplace: React.FC<RetailerMarketplaceProps> = ({ initia
                       </div>
                       <div className="text-right">
                         <p className="font-black italic text-sm tracking-tighter">
-                          {formatCurrency(item.price * item.quantity, item.currency)}
+                          {formatCurrency(item.price * item.quantity, preferredCurrency)}
                         </p>
                       </div>
                     </div>
@@ -301,13 +313,13 @@ export const RetailerMarketplace: React.FC<RetailerMarketplaceProps> = ({ initia
                 <div className="flex justify-between items-center text-zinc-500">
                   <span className="text-[10px] font-black uppercase tracking-widest">Subtotal</span>
                   <span className="text-sm font-black italic">
-                    {formatCurrency(cartTotal, cartCurrency)}
+                    {formatCurrency(cartTotal, preferredCurrency)}
                   </span>
                 </div>
                 <div className="flex justify-between items-center text-zinc-900 pt-4 border-t border-zinc-200">
                   <span className="text-[10px] font-black uppercase tracking-widest">Total Amount</span>
                   <span className="text-2xl font-black italic tracking-tighter">
-                    {formatCurrency(cartTotal, cartCurrency)}
+                    {formatCurrency(cartTotal, preferredCurrency)}
                   </span>
                 </div>
               </div>
@@ -382,7 +394,7 @@ export const RetailerMarketplace: React.FC<RetailerMarketplaceProps> = ({ initia
                 </div>
                 <div className="absolute bottom-4 right-4">
                   <Badge className="bg-zinc-900/80 backdrop-blur-md text-white font-black uppercase text-[10px] tracking-widest px-4 py-1.5 rounded-xl border-none">
-                    {formatCurrency(product.price, product.currency)}
+                    {formatCurrency(product.price, preferredCurrency)}
                   </Badge>
                 </div>
               </div>

@@ -33,7 +33,7 @@ export const SupplierProducts: React.FC<SupplierProductsProps> = ({
   onEmployeeAssign,
   onOrderDelete
 }) => {
-  const { activeOrg } = useAuth();
+  const { activeOrg, preferredCurrency } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -45,9 +45,15 @@ export const SupplierProducts: React.FC<SupplierProductsProps> = ({
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
-  const [currency, setCurrency] = useState("USD");
+  const [currency, setCurrency] = useState(preferredCurrency || "USD");
   const [imageUrl, setImageUrl] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (preferredCurrency && !editingProduct) {
+      setCurrency(preferredCurrency);
+    }
+  }, [preferredCurrency, editingProduct]);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const [orderSearchTerm, setOrderSearchTerm] = useState("");
@@ -154,7 +160,7 @@ export const SupplierProducts: React.FC<SupplierProductsProps> = ({
     setName("");
     setDescription("");
     setPrice("");
-    setCurrency("USD");
+    setCurrency(preferredCurrency || "USD");
     setImageUrl("");
   };
 

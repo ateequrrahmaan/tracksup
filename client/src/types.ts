@@ -7,6 +7,7 @@ export interface SystemUser {
   name: string;
   email: string;
   phone?: string;
+  currency?: string;
   createdAt: string;
 }
 
@@ -14,6 +15,7 @@ export interface Organization {
   id: string;
   name: string;
   ownerId: string;
+  currency?: string;
   createdAt: Timestamp;
 }
 

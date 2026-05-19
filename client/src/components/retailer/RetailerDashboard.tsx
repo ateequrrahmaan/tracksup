@@ -267,7 +267,7 @@ const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({ order, orgNam
 import { useLocation, useNavigate } from "react-router-dom";
 
 export const RetailerDashboard = () => {
-  const { user, memberships, activeOrg, organizations, switchOrg } = useAuth();
+  const { user, memberships, activeOrg, organizations, switchOrg, preferredCurrency } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   
@@ -471,7 +471,7 @@ export const RetailerDashboard = () => {
               <Card className="border-none shadow-sm bg-white overflow-hidden rounded-3xl group hover:scale-[1.02] transition-all">
                 <CardHeader className="pb-2 p-4 md:p-6">
                   <CardDescription className="text-[10px] font-black uppercase text-zinc-500 tracking-widest">Gross Expenditure</CardDescription>
-                  <CardTitle className="text-2xl md:text-3xl font-black italic tracking-tighter">{formatCurrency(stats.totalSpent)}</CardTitle>
+                  <CardTitle className="text-2xl md:text-3xl font-black italic tracking-tighter">{formatCurrency(stats.totalSpent, preferredCurrency)}</CardTitle>
                 </CardHeader>
                 <div className="px-4 md:px-6 pb-4">
                   <div className="h-1.5 w-full bg-zinc-50 rounded-full overflow-hidden">
@@ -482,7 +482,7 @@ export const RetailerDashboard = () => {
               <Card className="border-none shadow-sm bg-rose-50 overflow-hidden rounded-3xl group hover:scale-[1.02] transition-all">
                 <CardHeader className="pb-2 p-4 md:p-6">
                   <CardDescription className="text-[10px] font-black uppercase text-rose-500 tracking-widest">Pending Settlement</CardDescription>
-                  <CardTitle className="text-2xl md:text-3xl font-black italic tracking-tighter text-rose-600">{formatCurrency(stats.pendingPayments)}</CardTitle>
+                  <CardTitle className="text-2xl md:text-3xl font-black italic tracking-tighter text-rose-600">{formatCurrency(stats.pendingPayments, preferredCurrency)}</CardTitle>
                 </CardHeader>
                 <div className="px-4 md:px-6 pb-4">
                   <div className="h-1.5 w-full bg-rose-100 rounded-full overflow-hidden">
@@ -734,7 +734,7 @@ export const RetailerDashboard = () => {
               <div className="bg-emerald-600 rounded-3xl p-10 text-white shadow-2xl relative overflow-hidden group">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-700" />
                 <p className="text-[10px] font-black uppercase opacity-60 mb-4 tracking-[0.3em] font-sans">Resolved Capital</p>
-                <h3 className="text-5xl font-black italic tracking-tighter">${stats.paidPayments.toLocaleString(undefined, { minimumFractionDigits: 2 })}</h3>
+                <h3 className="text-5xl font-black italic tracking-tighter">{formatCurrency(stats.paidPayments, preferredCurrency)}</h3>
                 <div className="mt-8 h-1 w-full bg-white/20 rounded-full overflow-hidden">
                    <div className="h-full bg-white/60" style={{ width: `${(stats.paidPayments / stats.totalSpent) * 100}%` }} />
                 </div>
@@ -742,7 +742,7 @@ export const RetailerDashboard = () => {
               <div className="bg-rose-600 rounded-3xl p-10 text-white shadow-2xl relative overflow-hidden group">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-700" />
                 <p className="text-[10px] font-black uppercase opacity-60 mb-4 tracking-[0.3em] font-sans">Outstanding Settlement</p>
-                <h3 className="text-5xl font-black italic tracking-tighter">${stats.pendingPayments.toLocaleString(undefined, { minimumFractionDigits: 2 })}</h3>
+                <h3 className="text-5xl font-black italic tracking-tighter">{formatCurrency(stats.pendingPayments, preferredCurrency)}</h3>
                 <div className="mt-8 h-1 w-full bg-white/20 rounded-full overflow-hidden">
                    <div className="h-full bg-white/60" style={{ width: `${(stats.pendingPayments / stats.totalSpent) * 100}%` }} />
                 </div>

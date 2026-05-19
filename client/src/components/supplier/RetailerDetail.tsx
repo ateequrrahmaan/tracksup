@@ -16,7 +16,7 @@ import api from "@/services/api";
 export const RetailerDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { activeOrg } = useAuth();
+  const { activeOrg, preferredCurrency } = useAuth();
   const [retailer, setRetailer] = useState<SystemUser | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -150,7 +150,7 @@ export const RetailerDetail = () => {
               <Card>
                 <CardContent className="pt-6">
                   <div className="text-zinc-500 text-xs font-medium uppercase mb-1">Revenue</div>
-                  <div className="text-2xl font-bold">{formatCurrency(stats.totalRevenue)}</div>
+                  <div className="text-2xl font-bold">{formatCurrency(stats.totalRevenue, preferredCurrency)}</div>
                 </CardContent>
               </Card>
               <Card>
@@ -195,7 +195,7 @@ export const RetailerDetail = () => {
                         <TableRow key={`retailer-order-${order.id}`}>
                           <TableCell className="font-mono text-xs uppercase">{order.id.substring(0, 8)}</TableCell>
                           <TableCell>{new Date(order.createdAt?.toDate()).toLocaleDateString()}</TableCell>
-                          <TableCell className="font-medium">{formatCurrency(order.totalAmount, order.currency)}</TableCell>
+                          <TableCell className="font-medium">{formatCurrency(order.totalAmount, preferredCurrency)}</TableCell>
                           <TableCell>
                             <Badge variant={(
                               order.status === "delivered" ? "success" : 

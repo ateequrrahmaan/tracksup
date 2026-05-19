@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Order } from "@/types";
 import { Package } from "lucide-react";
 import { formatCurrency } from "@/constants";
+import { useAuth } from "@/lib/auth-context";
 
 interface DeliveryConfirmationModalProps {
   order: Order | null;
@@ -16,6 +17,7 @@ interface DeliveryConfirmationModalProps {
 }
 
 export const DeliveryConfirmationModal = ({ order, isOpen, onClose, onConfirm }: DeliveryConfirmationModalProps) => {
+  const { preferredCurrency } = useAuth();
   const [paymentStatus, setPaymentStatus] = useState("paid");
 
   if (!order) return null;
@@ -32,7 +34,9 @@ export const DeliveryConfirmationModal = ({ order, isOpen, onClose, onConfirm }:
       <DialogContent className="w-[95vw] sm:max-w-[425px] rounded-[2rem] md:rounded-[2.5rem] p-6 md:p-10 border-none shadow-2xl">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle className="text-xl md:text-2xl font-black uppercase italic tracking-tighter">Confirm Delivery</DialogTitle>
+            <div className="flex items-center gap-2">
+              <DialogTitle className="text-xl md:text-2xl font-black uppercase italic tracking-tighter">Confirm Delivery</DialogTitle>
+            </div>
             <DialogDescription className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">
               Complete the delivery for <strong className="text-zinc-900">{order.retailerName}</strong>.
             </DialogDescription>
@@ -56,7 +60,7 @@ export const DeliveryConfirmationModal = ({ order, isOpen, onClose, onConfirm }:
             <div className="p-4 rounded-2xl bg-zinc-900 text-white flex justify-between items-center shadow-xl">
                <div className="space-y-1">
                  <p className="text-[8px] font-black uppercase tracking-widest opacity-50 italic">Total Value</p>
-                 <p className="text-xl font-black italic tracking-tighter">{formatCurrency(order.totalAmount, order.currency)}</p>
+                 <p className="text-xl font-black italic tracking-tighter">{formatCurrency(order.totalAmount, preferredCurrency)}</p>
                </div>
                <div className="h-10 w-10 rounded-xl bg-white/10 flex items-center justify-center">
                  <Package className="h-5 w-5 text-zinc-400" />

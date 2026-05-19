@@ -13,13 +13,15 @@ import {
 } from "lucide-react";
 import { motion } from "motion/react";
 import { toast } from "sonner";
-import { formatCurrency } from "@/constants";
+import { formatCurrency, getCurrencySymbol } from "@/constants";
+import { useAuth } from "@/lib/auth-context";
 
 interface StrategicToolsProps {
   stats: any;
 }
 
 export const StrategicTools: React.FC<StrategicToolsProps> = ({ stats }) => {
+  const { preferredCurrency } = useAuth();
   const [target, setTarget] = React.useState<string>("");
   const currentRevenue = stats.totalRevenue || 0;
   
@@ -54,7 +56,7 @@ export const StrategicTools: React.FC<StrategicToolsProps> = ({ stats }) => {
               <div className="space-y-3">
                 <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-1">Desired Revenue Goal</Label>
                 <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 font-bold">$</span>
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 font-bold">{getCurrencySymbol(preferredCurrency)}</span>
                   <Input 
                     type="number"
                     placeholder="Enter target amount"
@@ -77,7 +79,7 @@ export const StrategicTools: React.FC<StrategicToolsProps> = ({ stats }) => {
                        {gap > 0 ? 'SHORTFALL' : 'SURPLUS'}
                     </div>
                   </div>
-                  <h4 className="text-3xl font-black italic tracking-tighter">{formatCurrency(Math.abs(gap))}</h4>
+                  <h4 className="text-3xl font-black italic tracking-tighter">{formatCurrency(Math.abs(gap), preferredCurrency)}</h4>
                   <div className="pt-4 border-t border-white/10">
                     <p className="text-[10px] text-white/50 leading-relaxed">
                       To reach this goal, you need approximately <span className="text-white font-bold">{Math.ceil(Math.abs(gap) / (stats.totalRevenue / (stats.totalOrders || 1)))}</span> more orders at your current average order value.
@@ -169,7 +171,7 @@ export const StrategicTools: React.FC<StrategicToolsProps> = ({ stats }) => {
                    <div className="grid grid-cols-2 gap-4 pt-4 border-t border-zinc-200">
                       <div>
                          <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Yield</p>
-                         <p className="text-base font-black italic">{formatCurrency(product.revenue)}</p>
+                         <p className="text-base font-black italic">{formatCurrency(product.revenue, preferredCurrency)}</p>
                       </div>
                       <div>
                          <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Velocity</p>

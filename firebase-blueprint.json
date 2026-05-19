@@ -8,6 +8,7 @@
         "uid": { "type": "string", "description": "Unique identifier for the user." },
         "name": { "type": "string", "description": "Full name of the user." },
         "email": { "type": "string", "format": "email", "description": "Email address of the user." },
+        "currency": { "type": "string", "description": "User preferred display currency." },
         "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp." }
       },
       "required": ["uid", "name", "email"]
@@ -20,6 +21,7 @@
         "name": { "type": "string", "description": "Name of the organization." },
         "type": { "type": "string", "enum": ["supplier", "retailer"], "description": "Type of organization." },
         "ownerId": { "type": "string", "description": "UID of the owner user." },
+        "currency": { "type": "string", "description": "Default currency for the organization." },
         "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp." }
       },
       "required": ["name", "type", "ownerId"]

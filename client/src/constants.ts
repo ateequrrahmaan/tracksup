@@ -9,10 +9,11 @@ export const CURRENCIES = [
 ];
 
 export const getCurrencySymbol = (code?: string) => {
+  if (!code) return "$";
   return CURRENCIES.find(c => c.code === code)?.symbol || "$";
 };
 
 export const formatCurrency = (amount: number, code?: string) => {
   const symbol = getCurrencySymbol(code);
-  return `${symbol}${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return `${symbol}${(amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };

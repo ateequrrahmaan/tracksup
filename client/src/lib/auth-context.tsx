@@ -16,6 +16,7 @@ interface AuthContextType {
   switchOrg: (orgId: string) => void;
   refreshContext: () => Promise<void>;
   logout: () => Promise<void>;
+  preferredCurrency: string;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -28,6 +29,7 @@ const AuthContext = createContext<AuthContextType>({
   switchOrg: () => {},
   refreshContext: async () => {},
   logout: async () => {},
+  preferredCurrency: "USD",
 });
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -123,6 +125,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const activeMembership = memberships.find(m => m.organizationId === activeOrgId);
   const activeOrg = activeOrgId ? organizations[activeOrgId] || null : null;
 
+  const preferredCurrency = user?.currency || activeOrg?.currency || "USD";
+
   const value = React.useMemo(() => ({ 
     user, 
     firebaseUser, 
@@ -134,8 +138,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     loading, 
     switchOrg,
     refreshContext,
-    logout
-  }), [user, firebaseUser, memberships, activeOrg, organizations, loading, activeMembership?.role, activeOrgId, logout]);
+    logout,
+    preferredCurrency
+  }), [user, firebaseUser, memberships, activeOrg, organizations, loading, activeMembership?.role, activeOrgId, logout, preferredCurrency]);
 
   return (
     <AuthContext.Provider value={value}>

@@ -1,6 +1,7 @@
 import React from "react";
 import { Order, SystemUser } from "@/types";
 import { formatCurrency } from "@/constants";
+import { useAuth } from "@/lib/auth-context";
 import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -46,6 +47,7 @@ export const SupplierOrders: React.FC<SupplierOrdersProps> = ({
   onEmployeeAssign,
   onOrderDelete,
 }) => {
+  const { preferredCurrency } = useAuth();
   // Compute unique retailers for filter
   const uniqueRetailerIds = Array.from(new Set(orders.map(o => o.retailerId).filter(Boolean))) as string[];
 
@@ -194,7 +196,7 @@ export const SupplierOrders: React.FC<SupplierOrdersProps> = ({
                   </TableCell>
                   <TableCell className="px-10 text-right">
                     <div className="flex items-center justify-end gap-5 group-hover:translate-x-2 transition-all">
-                      <span className="font-black text-zinc-900 text-lg italic tracking-tighter">{formatCurrency(order.totalAmount, order.currency)}</span>
+                      <span className="font-black text-zinc-900 text-lg italic tracking-tighter">{formatCurrency(order.totalAmount, preferredCurrency)}</span>
                       <div className="h-8 w-8 rounded-xl bg-zinc-50 flex items-center justify-center group-hover:bg-zinc-900 group-hover:text-white transition-colors">
                           <ChevronRight className="h-4 w-4" />
                       </div>
@@ -246,7 +248,7 @@ export const SupplierOrders: React.FC<SupplierOrdersProps> = ({
                   </div>
                   <p className="font-mono text-[9px] font-black text-zinc-400 uppercase tracking-wider">#{order.id.slice(-8).toUpperCase()} • {order.deliveryDate}</p>
                 </div>
-                <p className="font-black text-zinc-900 text-lg italic tracking-tighter">{formatCurrency(order.totalAmount, order.currency)}</p>
+                <p className="font-black text-zinc-900 text-lg italic tracking-tighter">{formatCurrency(order.totalAmount, preferredCurrency)}</p>
                 <div className="flex items-center gap-2">
                   <Button 
                     variant="ghost" 

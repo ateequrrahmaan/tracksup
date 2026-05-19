@@ -5,36 +5,47 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { User, Mail, Building, Shield, Bell, Lock, LogOut } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { User, Mail, Building, Shield, Bell, Lock, LogOut, Coins } from "lucide-react";
 import { toast } from "sonner";
+import { CURRENCIES } from "@/constants";
 
 export const SettingsView = () => {
   const { user, activeRole, activeOrg, refreshContext, logout } = useAuth();
   const [userName, setUserName] = React.useState(user?.name || "");
   const [orgName, setOrgName] = React.useState(activeOrg?.name || "");
+  const [currency, setCurrency] = React.useState(user?.currency || activeOrg?.currency || "USD");
   const [isSaving, setIsSaving] = React.useState(false);
   const [isLoggingOut, setIsLoggingOut] = React.useState(false);
 
   React.useEffect(() => {
     if (user?.name) setUserName(user.name);
-  }, [user?.name]);
+    if (user?.currency) setCurrency(user.currency);
+  }, [user?.name, user?.currency]);
 
   React.useEffect(() => {
     if (activeOrg?.name) setOrgName(activeOrg.name);
-  }, [activeOrg?.name]);
+    if (!user?.currency && activeOrg?.currency) setCurrency(activeOrg.currency);
+  }, [activeOrg?.name, activeOrg?.currency, user?.currency]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
     try {
-      // 1. Update Personal Name
-      if (userName !== user?.name) {
-        await api.patch("/auth/me", { name: userName });
+      // 1. Update Personal Data
+      if (userName !== user?.name || currency !== user?.currency) {
+        await api.patch("/auth/me", { 
+          name: userName,
+          currency: currency 
+        });
       }
 
-      // 2. Update Org Name (if owner)
-      if (activeOrg && orgName !== activeOrg.name) {
-        await api.patch(`/organizations/${activeOrg.id}`, { name: orgName });
+      // 2. Update Org Data (if owner/admin)
+      if (activeOrg && (orgName !== activeOrg.name || (activeRole !== 'employee' && currency !== activeOrg.currency))) {
+        await api.patch(`/organizations/${activeOrg.id}`, { 
+          name: orgName,
+          currency: currency
+        });
       }
 
       await refreshContext?.();
@@ -102,17 +113,37 @@ export const SettingsView = () => {
                   </div>
                 </div>
 
-                <div className="space-y-3">
-                  <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-1">
-                    {activeRole === 'retailer' ? 'Shop Name' : 'Organization Name'}
-                  </Label>
-                  <div className="relative group">
-                    <Building className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400 group-focus-within:text-zinc-900 transition-colors" />
-                    <Input 
-                      value={orgName} 
-                      onChange={(e) => setOrgName(e.target.value)}
-                      className="pl-12 h-14 rounded-2xl bg-zinc-50 border-zinc-100 focus:ring-zinc-900 transition-all font-bold text-sm" 
-                    />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="space-y-3">
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-1">
+                      {activeRole === 'retailer' ? 'Shop Name' : 'Organization Name'}
+                    </Label>
+                    <div className="relative group">
+                      <Building className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400 group-focus-within:text-zinc-900 transition-colors" />
+                      <Input 
+                        value={orgName} 
+                        onChange={(e) => setOrgName(e.target.value)}
+                        className="pl-12 h-14 rounded-2xl bg-zinc-50 border-zinc-100 focus:ring-zinc-900 transition-all font-bold text-sm" 
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-1">Display Currency</Label>
+                    <div className="relative group">
+                      <Coins className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400 group-focus-within:text-zinc-900 transition-colors z-10" />
+                      <Select value={currency} onValueChange={setCurrency}>
+                        <SelectTrigger className="pl-12 h-14 rounded-2xl bg-zinc-50 border-zinc-100 focus:ring-zinc-900 transition-all font-bold text-sm">
+                          <SelectValue placeholder="Select Currency" />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-2xl border-none shadow-2xl p-2">
+                          {CURRENCIES.map((c) => (
+                            <SelectItem key={c.code} value={c.code} className="font-bold">
+                              {c.code} ({c.symbol})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 </div>
 
