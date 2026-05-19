@@ -45,7 +45,7 @@ export const SupplierInsights: React.FC<SupplierInsightsProps> = ({ stats }) => 
     <div className="space-y-10 pb-20">
       {/* Top Banner */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-         <Card className="lg:col-span-2 rounded-[2.5rem] bg-zinc-900 text-white p-10 relative overflow-hidden flex flex-col justify-between min-h-[300px]">
+         <Card className="lg:col-span-2 rounded-[2.5rem] bg-zinc-900 text-white p-6 sm:p-10 relative overflow-hidden flex flex-col justify-between min-h-[300px]">
             <div className="absolute top-0 right-0 w-1/2 h-full opacity-10">
                <Activity className="h-full w-full stroke-[0.5]" />
             </div>
@@ -69,8 +69,8 @@ export const SupplierInsights: React.FC<SupplierInsightsProps> = ({ stats }) => 
             </div>
          </Card>
 
-         <Card className="rounded-[2.5rem] bg-white p-10 flex flex-col justify-between">
-            <div className="flex justify-between items-start">
+         <Card className="rounded-[2.5rem] bg-white p-6 sm:p-10 flex flex-col justify-between">
+            <div className="flex justify-between items-start flex-wrap gap-4">
                <div>
                   <h3 className="text-xl font-black uppercase italic tracking-tight">Risk Projection</h3>
                   <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mt-1">Settlement latency</p>
@@ -106,7 +106,7 @@ export const SupplierInsights: React.FC<SupplierInsightsProps> = ({ stats }) => 
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <Card className="rounded-[2.5rem] bg-white p-10 border-none shadow-sm">
+        <Card className="rounded-[2.5rem] bg-white p-6 sm:p-10 border-none shadow-sm">
           <div className="flex justify-between items-center mb-10 text-zinc-900">
             <div>
               <h3 className="text-xl font-black uppercase italic tracking-tight">Financial Flow</h3>
@@ -155,7 +155,7 @@ export const SupplierInsights: React.FC<SupplierInsightsProps> = ({ stats }) => 
           </div>
         </Card>
 
-        <Card className="rounded-[2.5rem] bg-white p-10 border-none shadow-sm">
+        <Card className="rounded-[2.5rem] bg-white p-6 sm:p-10 border-none shadow-sm">
           <div className="flex justify-between items-center mb-10 text-zinc-900">
             <div>
               <h3 className="text-xl font-black uppercase italic tracking-tight">Product Performance</h3>
@@ -187,7 +187,7 @@ export const SupplierInsights: React.FC<SupplierInsightsProps> = ({ stats }) => 
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <Card className="rounded-[2.5rem] bg-white p-10 border-none shadow-sm">
+        <Card className="rounded-[2.5rem] bg-white p-6 sm:p-10 border-none shadow-sm">
           <div className="flex justify-between items-center mb-10 text-zinc-900">
             <div>
               <h3 className="text-xl font-black uppercase italic tracking-tight">Settlement Mix</h3>
@@ -195,8 +195,8 @@ export const SupplierInsights: React.FC<SupplierInsightsProps> = ({ stats }) => 
             </div>
             <Activity className="h-6 w-6 text-zinc-200" />
           </div>
-          <div className="h-80 w-full flex items-center">
-            <div className="flex-1 h-full">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
+            <div className="w-full h-64 sm:h-80 flex-1 relative">
                <ResponsiveContainer width="100%" height="100%">
                  <PieChart>
                   <Pie
@@ -216,21 +216,21 @@ export const SupplierInsights: React.FC<SupplierInsightsProps> = ({ stats }) => 
                  </PieChart>
                </ResponsiveContainer>
             </div>
-            <div className="w-40 space-y-4 pr-4">
+            <div className="w-full sm:w-40 flex flex-row sm:flex-col justify-center sm:justify-start gap-6 sm:gap-4 sm:space-y-4 pr-0 sm:pr-4 flex-wrap">
                {pieData.map((item) => (
-                  <div key={item.name} className="space-y-1">
+                  <div key={item.name} className="space-y-1 flex flex-col items-center sm:items-start">
                      <div className="flex items-center gap-2">
                         <div className="h-2 w-2 rounded-full" style={{ backgroundColor: item.color }} />
                         <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">{item.name}</span>
                      </div>
-                     <p className="text-xl font-black italic ml-4">{item.value}</p>
+                     <p className="text-xl font-black italic sm:ml-4">{item.value}</p>
                   </div>
                ))}
             </div>
           </div>
         </Card>
         
-        <Card className="rounded-[2.5rem] bg-zinc-900 text-white p-10 flex flex-col justify-between overflow-hidden relative">
+        <Card className="rounded-[2.5rem] bg-zinc-900 text-white p-6 sm:p-10 flex flex-col justify-between overflow-hidden relative">
           <div className="absolute -bottom-10 -right-10 opacity-5">
              <Zap className="h-64 w-64" />
           </div>

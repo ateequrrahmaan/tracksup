@@ -37,7 +37,7 @@ export const StrategicTools: React.FC<StrategicToolsProps> = ({ stats }) => {
     <div className="space-y-10 pb-20">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Revenue Projection Tool */}
-        <Card className="rounded-[2.5rem] bg-white border-none shadow-sm p-10 overflow-hidden relative">
+        <Card className="rounded-[2.5rem] bg-white border-none shadow-sm p-6 sm:p-10 overflow-hidden relative">
           <div className="absolute top-0 right-0 p-8 opacity-5">
             <Calculator className="h-32 w-32" />
           </div>
@@ -92,7 +92,7 @@ export const StrategicTools: React.FC<StrategicToolsProps> = ({ stats }) => {
         </Card>
 
         {/* Network Expansion Tools */}
-        <Card className="rounded-[2.5rem] bg-zinc-900 text-white border-none shadow-sm p-10 overflow-hidden relative">
+        <Card className="rounded-[2.5rem] bg-zinc-900 text-white border-none shadow-sm p-6 sm:p-10 overflow-hidden relative">
           <div className="absolute -bottom-10 -right-10 opacity-10 rotate-12">
             <Sparkles className="h-64 w-64" />
           </div>
@@ -146,7 +146,7 @@ export const StrategicTools: React.FC<StrategicToolsProps> = ({ stats }) => {
       </div>
 
       {/* Product Success Matrix */}
-      <Card className="rounded-[2.5rem] bg-white border-none shadow-sm p-10">
+      <Card className="rounded-[2.5rem] bg-white border-none shadow-sm p-6 sm:p-10">
          <div className="flex justify-between items-center mb-10">
             <div>
               <h3 className="text-xl font-black uppercase italic tracking-tight">Asset Success Matrix</h3>
