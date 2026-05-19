@@ -10,12 +10,13 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, User, Mail, Shield, CheckCircle, Clock, Package, BarChart3, TrendingUp } from "lucide-react";
 import { Order, SystemUser } from "@/types";
+import { formatCurrency } from "@/constants";
 import api from "@/services/api";
 
 export const EmployeeDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { activeOrg } = useAuth();
+  const { activeOrg, preferredCurrency } = useAuth();
   const [employee, setEmployee] = useState<SystemUser | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -204,7 +205,7 @@ export const EmployeeDetail = () => {
                             {new Date(order.updatedAt?.toDate()).toLocaleString()}
                           </TableCell>
                           <TableCell className="text-right font-medium">
-                            ${order.totalAmount?.toFixed(2)}
+                            {formatCurrency(order.totalAmount, preferredCurrency)}
                           </TableCell>
                         </TableRow>
                       ))
