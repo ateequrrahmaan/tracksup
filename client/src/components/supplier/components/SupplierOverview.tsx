@@ -63,10 +63,10 @@ export const SupplierOverview: React.FC<SupplierOverviewProps> = ({ stats }) => 
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.1 }}
           >
-            <Card className={`rounded-[2rem] border-none shadow-sm overflow-hidden ${card.color === "bg-white text-zinc-900" ? "bg-white" : card.color}`}>
+            <Card className={`rounded-[2rem] border-none shadow-sm overflow-hidden ${card.color ? (card.color === "bg-white text-zinc-900" ? "bg-white" : card.color) : "bg-white"}`}>
               <CardContent className="p-8">
                 <div className="flex justify-between items-start mb-6">
-                  <div className={`p-3 rounded-2xl ${card.color === "bg-white text-zinc-900" ? "bg-zinc-50" : "bg-white/10"}`}>
+                  <div className={`p-3 rounded-2xl ${card.color === "bg-zinc-900 text-white" ? "bg-white/10" : "bg-zinc-50"}`}>
                     <card.icon className="h-6 w-6" />
                   </div>
                   <div className={`flex items-center gap-1 text-[10px] font-black uppercase tracking-widest ${card.trend === "up" ? "text-emerald-500" : "text-rose-500"}`}>
@@ -75,14 +75,14 @@ export const SupplierOverview: React.FC<SupplierOverviewProps> = ({ stats }) => 
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <p className={`text-[10px] font-black uppercase tracking-widest ${card.color === "bg-white text-zinc-900" ? "text-zinc-500" : "text-white/60"}`}>
+                  <p className={`text-[10px] font-black uppercase tracking-widest ${card.color === "bg-zinc-900 text-white" ? "text-white/90" : "text-zinc-500"}`}>
                     {card.label}
                   </p>
                   <h3 className="text-3xl font-black italic tracking-tighter">
                     {card.value}
                   </h3>
                 </div>
-                <p className={`mt-4 text-[9px] font-bold uppercase tracking-widest ${card.color === "bg-white text-zinc-900" ? "text-zinc-500" : "text-white/40"}`}>
+                <p className={`mt-4 text-[9px] font-bold uppercase tracking-widest ${card.color === "bg-zinc-900 text-white" ? "text-white/70" : "text-zinc-500"}`}>
                   {card.sub}
                 </p>
               </CardContent>

@@ -74,14 +74,14 @@ export const StrategicTools: React.FC<StrategicToolsProps> = ({ stats }) => {
                   className="p-6 rounded-3xl bg-zinc-900 text-white space-y-4"
                 >
                   <div className="flex justify-between items-center">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-white/50">Revenue Gap</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-white/80">Revenue Gap</p>
                     <div className={`flex items-center gap-1 text-[10px] font-black ${gap > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
                        {gap > 0 ? 'SHORTFALL' : 'SURPLUS'}
                     </div>
                   </div>
                   <h4 className="text-3xl font-black italic tracking-tighter">{formatCurrency(Math.abs(gap), preferredCurrency)}</h4>
                   <div className="pt-4 border-t border-white/10">
-                    <p className="text-[10px] text-white/50 leading-relaxed">
+                    <p className="text-[10px] text-white/70 leading-relaxed">
                       To reach this goal, you need approximately <span className="text-white font-bold">{Math.ceil(Math.abs(gap) / (stats.totalRevenue / (stats.totalOrders || 1)))}</span> more orders at your current average order value.
                     </p>
                   </div>
@@ -103,7 +103,7 @@ export const StrategicTools: React.FC<StrategicToolsProps> = ({ stats }) => {
               </div>
               <div>
                 <h3 className="text-xl font-black uppercase italic tracking-tight">Market Intel</h3>
-                <p className="text-[10px] font-black uppercase tracking-widest text-white/50">Expansion opportunity matrix</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-white/80">Expansion opportunity matrix</p>
               </div>
             </div>
 
@@ -113,7 +113,7 @@ export const StrategicTools: React.FC<StrategicToolsProps> = ({ stats }) => {
                   <h4 className="text-xs font-black uppercase italic tracking-tight">Retailer Retention</h4>
                   <ArrowRight className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-all translate-x-[-10px] group-hover:translate-x-0" />
                 </div>
-                <p className="text-[10px] text-white/40 leading-relaxed">Analyze which retail partners have the highest churn risk based on order frequency decay.</p>
+                <p className="text-[10px] text-white/70 leading-relaxed">Analyze which retail partners have the highest churn risk based on order frequency decay.</p>
               </div>
 
               <div className="p-5 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 transition-all cursor-pointer group">
@@ -121,7 +121,7 @@ export const StrategicTools: React.FC<StrategicToolsProps> = ({ stats }) => {
                   <h4 className="text-xs font-black uppercase italic tracking-tight">Product Mix Optimization</h4>
                   <ArrowRight className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-all translate-x-[-10px] group-hover:translate-x-0" />
                 </div>
-                <p className="text-[10px] text-white/40 leading-relaxed">Identify complementary products that are frequently missing from high-value orders.</p>
+                <p className="text-[10px] text-white/70 leading-relaxed">Identify complementary products that are frequently missing from high-value orders.</p>
               </div>
 
               <div className="p-5 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 transition-all cursor-pointer group">
@@ -129,7 +129,7 @@ export const StrategicTools: React.FC<StrategicToolsProps> = ({ stats }) => {
                   <h4 className="text-xs font-black uppercase italic tracking-tight">Logistics Heatmap</h4>
                   <ArrowRight className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-all translate-x-[-10px] group-hover:translate-x-0" />
                 </div>
-                <p className="text-[10px] text-white/40 leading-relaxed">Visualize geographic delivery clusters to optimize route density and fuel overhead.</p>
+                <p className="text-[10px] text-white/70 leading-relaxed">Visualize geographic delivery clusters to optimize route density and fuel overhead.</p>
               </div>
             </div>
 

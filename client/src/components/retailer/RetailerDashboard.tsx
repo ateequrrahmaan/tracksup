@@ -229,11 +229,11 @@ const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({ order, orgNam
           <div className="flex justify-end mb-12">
              <div className="w-full max-w-xs space-y-3 bg-zinc-900 text-white p-8 rounded-3xl shadow-2xl relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-24 h-24 bg-white/5 rounded-full -mr-12 -mt-12" />
-                <div className="flex justify-between items-center opacity-60">
+                <div className="flex justify-between items-center opacity-80">
                    <span className="text-[10px] font-black uppercase tracking-widest">Subtotal</span>
                    <span className="text-xs font-bold">{formatCurrency(order.totalAmount, order.currency)}</span>
                 </div>
-                <div className="flex justify-between items-center opacity-60">
+                <div className="flex justify-between items-center opacity-80">
                    <span className="text-[10px] font-black uppercase tracking-widest">Network Tax</span>
                    <span className="text-xs font-bold">$0.00</span>
                 </div>
@@ -733,7 +733,7 @@ export const RetailerDashboard = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="bg-emerald-600 rounded-3xl p-10 text-white shadow-2xl relative overflow-hidden group">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-700" />
-                <p className="text-[10px] font-black uppercase opacity-60 mb-4 tracking-[0.3em] font-sans">Resolved Capital</p>
+                <p className="text-[10px] font-black uppercase opacity-90 mb-4 tracking-[0.3em] font-sans">Resolved Capital</p>
                 <h3 className="text-5xl font-black italic tracking-tighter">{formatCurrency(stats.paidPayments, preferredCurrency)}</h3>
                 <div className="mt-8 h-1 w-full bg-white/20 rounded-full overflow-hidden">
                    <div className="h-full bg-white/60" style={{ width: `${(stats.paidPayments / stats.totalSpent) * 100}%` }} />
@@ -741,7 +741,7 @@ export const RetailerDashboard = () => {
               </div>
               <div className="bg-rose-600 rounded-3xl p-10 text-white shadow-2xl relative overflow-hidden group">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-700" />
-                <p className="text-[10px] font-black uppercase opacity-60 mb-4 tracking-[0.3em] font-sans">Outstanding Settlement</p>
+                <p className="text-[10px] font-black uppercase opacity-90 mb-4 tracking-[0.3em] font-sans">Outstanding Settlement</p>
                 <h3 className="text-5xl font-black italic tracking-tighter">{formatCurrency(stats.pendingPayments, preferredCurrency)}</h3>
                 <div className="mt-8 h-1 w-full bg-white/20 rounded-full overflow-hidden">
                    <div className="h-full bg-white/60" style={{ width: `${(stats.pendingPayments / stats.totalSpent) * 100}%` }} />
