@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/lib/auth-context";
 import { 
   Package2, 
+  Package,
   LayoutDashboard, 
   Users, 
   Store, 
@@ -61,6 +62,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       { id: "retailers", label: "Retailers", icon: Store, path: "/supplier/retailers" },
       { id: "employees", label: "Employees", icon: Users, path: "/supplier/employees" },
       { id: "products", label: "Products", icon: Box, path: "/supplier/products" },
+      { id: "inventory", label: "Inventory", icon: Package, path: "/supplier/inventory" },
       { id: "performance", label: "Performance", icon: TrendingUp, path: "/supplier/performance" },
       { id: "strategy", label: "Strategy", icon: Zap, path: "/supplier/strategy" },
       { id: "invites", label: "Invites", icon: FileText, path: "/supplier/invites" },

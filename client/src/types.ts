@@ -73,5 +73,14 @@ export interface Product {
   price: number;
   currency: string;
   imageUrl?: string;
+  stock?: number;
+  unitCost?: number;
+  restockHistory?: Array<{
+    quantityAdded: number;
+    unitCost: number;
+    totalCost: number;
+    date: string;
+    notes?: string;
+  }>;
   createdAt: Timestamp;
 }

@@ -20,6 +20,7 @@ import { SupplierInsights } from "./components/SupplierInsights";
 import { SupplierNetwork } from "./components/SupplierNetwork";
 import { SupplierInvites } from "./components/SupplierInvites";
 import { SupplierProducts } from "./components/SupplierProducts";
+import { SupplierInventory } from "./components/SupplierInventory";
 import { StrategicTools } from "./components/StrategicTools";
 import { SettingsView } from "../shared/SettingsView";
 
@@ -37,6 +38,7 @@ export const SupplierDashboard = () => {
     if (location.pathname === "/supplier/strategy") return "strategy";
     if (location.pathname === "/supplier/retailers" || location.pathname === "/supplier/employees") return "network";
     if (location.pathname === "/supplier/products") return "products";
+    if (location.pathname === "/supplier/inventory") return "inventory";
     if (location.pathname === "/supplier/invites") return "invites";
     if (location.pathname === "/settings") return "settings";
     return "overview";
@@ -487,6 +489,7 @@ export const SupplierDashboard = () => {
           onOrderDelete={handleDeleteOrder}
         />
       )}
+      {activeTab === "inventory" && <SupplierInventory />}
       {activeTab === "invites" && (
         <SupplierInvites 
             invites={invites} 

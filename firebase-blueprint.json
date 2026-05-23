@@ -36,6 +36,22 @@
         "price": { "type": "number", "description": "Unit price." },
         "currency": { "type": "string", "description": "Currency code (e.g., USD)." },
         "imageUrl": { "type": "string", "description": "URL of the product image." },
+        "stock": { "type": "number", "description": "Current stock levels in inventory." },
+        "unitCost": { "type": "number", "description": "Manufacturing or acquisition unit cost." },
+        "restockHistory": {
+          "type": "array",
+          "description": "Historic ledger of restock batches.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "quantityAdded": { "type": "number" },
+              "unitCost": { "type": "number" },
+              "totalCost": { "type": "number" },
+              "date": { "type": "string" },
+              "notes": { "type": "string" }
+            }
+          }
+        },
         "supplierId": { "type": "string", "description": "ID of the supplier organization." },
         "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp." },
         "updatedAt": { "type": "string", "format": "date-time", "description": "Last update timestamp." }

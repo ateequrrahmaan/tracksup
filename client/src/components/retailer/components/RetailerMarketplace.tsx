@@ -97,6 +97,12 @@ export const RetailerMarketplace: React.FC<RetailerMarketplaceProps> = ({ initia
   };
 
   const addToCart = (product: Product & { supplierName: string }) => {
+    const currentQtyInCart = cart[product.id]?.quantity || 0;
+    if (product.stock !== undefined && (currentQtyInCart + 1) > product.stock) {
+      toast.error(`Supply deficit: Only ${product.stock} units available in ${product.supplierName} inventory.`);
+      return;
+    }
+
     setCart(prev => {
       const existing = prev[product.id];
       if (existing) {
@@ -117,10 +123,15 @@ export const RetailerMarketplace: React.FC<RetailerMarketplaceProps> = ({ initia
     setCart(prev => {
       const item = prev[productId];
       if (item) {
-        const newQty = Math.max(1, item.quantity + delta);
+        const newQty = item.quantity + delta;
+        if (delta > 0 && item.stock !== undefined && newQty > item.stock) {
+          toast.error(`Supply deficit: Only ${item.stock} units of ${item.name} available.`);
+          return prev;
+        }
+        const finalQty = Math.max(1, newQty);
         return {
           ...prev,
-          [productId]: { ...item, quantity: newQty }
+          [productId]: { ...item, quantity: finalQty }
         };
       }
       return prev;
@@ -392,7 +403,24 @@ export const RetailerMarketplace: React.FC<RetailerMarketplaceProps> = ({ initia
                     {product.supplierName}
                   </Badge>
                 </div>
-                <div className="absolute bottom-4 right-4">
+                <div className="absolute top-4 right-4">
+                  {product.stock !== undefined ? (
+                    product.stock > 0 ? (
+                      <Badge className="bg-emerald-500/90 backdrop-blur-md text-white font-black uppercase text-[8px] tracking-[0.2em] px-3 py-1.5 rounded-lg border-none shadow-sm flex items-center gap-1.5">
+                        <Package className="h-3 w-3" /> Stock: {product.stock}
+                      </Badge>
+                    ) : (
+                      <Badge className="bg-rose-500/90 backdrop-blur-md text-white font-black uppercase text-[8px] tracking-[0.2em] px-3 py-1.5 rounded-lg border-none shadow-sm flex items-center gap-1.5 animate-pulse">
+                        <AlertCircle className="h-3 w-3" /> Out of Stock
+                      </Badge>
+                    )
+                  ) : (
+                    <Badge className="bg-emerald-500/90 backdrop-blur-md text-white font-black uppercase text-[8px] tracking-[0.2em] px-3 py-1.5 rounded-lg border-none shadow-sm flex items-center gap-1.5">
+                      <Package className="h-3 w-3" /> Available
+                    </Badge>
+                  )}
+                </div>
+                <div className="absolute bottom-4 right-4 animate-in fade-in">
                   <Badge className="bg-zinc-900/80 backdrop-blur-md text-white font-black uppercase text-[10px] tracking-widest px-4 py-1.5 rounded-xl border-none">
                     {formatCurrency(product.price, preferredCurrency)}
                   </Badge>
@@ -408,9 +436,10 @@ export const RetailerMarketplace: React.FC<RetailerMarketplaceProps> = ({ initia
                 <div className="mt-8 pt-6 border-t border-zinc-100 flex items-center justify-between gap-4">
                    <Button 
                     onClick={() => addToCart(product)}
-                    className="w-full rounded-2xl h-12 font-black uppercase italic tracking-widest bg-zinc-900 text-white hover:bg-zinc-800 transition-all text-[10px]"
+                    disabled={product.stock !== undefined && product.stock <= 0}
+                    className="w-full rounded-2xl h-12 font-black uppercase italic tracking-widest bg-zinc-900 text-white hover:bg-zinc-800 transition-all text-[10px] disabled:opacity-50 disabled:hover:scale-100"
                    >
-                     Add to Bag <Plus className="ml-2 h-4 w-4" />
+                     {product.stock !== undefined && product.stock <= 0 ? "Out of Stock" : <>Add to Bag <Plus className="ml-2 h-4 w-4" /></>}
                    </Button>
                 </div>
               </CardContent>

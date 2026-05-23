@@ -91,6 +91,29 @@ export const updateOrderStatus = async (orderId: string, orgId: string, status: 
     throw new Error("Unauthorized to update this order status");
   }
 
+  // If order is cancelled, we return the stock of those products to inventory
+  if (status === "cancelled" && orderData.status !== "cancelled") {
+    const productsSnapshot = await firestore.collection("products")
+      .where("supplierId", "==", orderData.supplierId)
+      .get();
+    const productsInDb = productsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+    const batch = firestore.batch();
+    
+    for (const item of orderData.items || []) {
+      const matchedProduct = productsInDb.find(p => p.name?.toLowerCase() === item.name?.toLowerCase());
+      if (matchedProduct) {
+        const currentStock = typeof matchedProduct.stock === "number" ? matchedProduct.stock : 0;
+        const pRef = firestore.collection("products").doc(matchedProduct.id);
+        batch.update(pRef, {
+          stock: currentStock + item.quantity,
+          updatedAt: FieldValue.serverTimestamp()
+        });
+      }
+    }
+    await batch.commit();
+    console.log(`[OrderService] Returned stock from cancelled order ${orderId}`);
+  }
+
   await orderRef.update({
     status,
     updatedAt: FieldValue.serverTimestamp()
@@ -186,6 +209,42 @@ export const createOrder = async (orgId: string, supplierId: string, data: any) 
 
   // Remove userId from data to avoid double storage
   delete orderData.userId;
+
+  // 3b. Verify product stock constraints and update stocks automatically
+  const productsSnapshot = await firestore.collection("products")
+    .where("supplierId", "==", supplierId)
+    .get();
+
+  const productsInDb = productsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+  const batchUpdates: { docId: string; newStock: number }[] = [];
+
+  for (const item of data.items || []) {
+    const matchedProduct = productsInDb.find(p => p.name?.toLowerCase() === item.name?.toLowerCase());
+    if (matchedProduct) {
+      const currentStock = typeof matchedProduct.stock === "number" ? matchedProduct.stock : 0;
+      if (currentStock < item.quantity) {
+        throw new Error(`Insufficient stock for "${item.name}". Available stock: ${currentStock}, Requested: ${item.quantity}. Please increase stock in the Inventory console.`);
+      }
+      batchUpdates.push({
+        docId: matchedProduct.id,
+        newStock: currentStock - item.quantity
+      });
+    }
+  }
+
+  // Atomically update stocks as part of order genesis
+  if (batchUpdates.length > 0) {
+    const batch = firestore.batch();
+    for (const update of batchUpdates) {
+      const pRef = firestore.collection("products").doc(update.docId);
+      batch.update(pRef, {
+        stock: update.newStock,
+        updatedAt: FieldValue.serverTimestamp()
+      });
+    }
+    await batch.commit();
+    console.log(`[OrderService] Automatically deducted stock for ${batchUpdates.length} products`);
+  }
 
   console.log("[OrderService] Attempting to save order to Firestore...");
   const docRef = await firestore.collection("orders").add(orderData);

@@ -47,6 +47,8 @@ export const SupplierProducts: React.FC<SupplierProductsProps> = ({
   const [price, setPrice] = useState("");
   const [currency, setCurrency] = useState(preferredCurrency || "USD");
   const [imageUrl, setImageUrl] = useState("");
+  const [initialStock, setInitialStock] = useState("");
+  const [initialCost, setInitialCost] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -109,6 +111,17 @@ export const SupplierProducts: React.FC<SupplierProductsProps> = ({
         price: parseFloat(price),
         currency,
         imageUrl: imageUrl || `https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?q=80&w=400&auto=format&fit=crop`,
+        ...(editingProduct ? {} : {
+          stock: initialStock ? parseInt(initialStock) : 0,
+          unitCost: initialCost ? parseFloat(initialCost) : 0,
+          restockHistory: initialStock ? [{
+            quantityAdded: parseInt(initialStock),
+            unitCost: initialCost ? parseFloat(initialCost) : 0,
+            totalCost: (parseInt(initialStock)) * (initialCost ? parseFloat(initialCost) : 0),
+            date: new Date().toISOString(),
+            notes: "Initial inventory setup on creation"
+          }] : []
+        })
       };
 
       if (editingProduct) {
@@ -162,6 +175,8 @@ export const SupplierProducts: React.FC<SupplierProductsProps> = ({
     setPrice("");
     setCurrency(preferredCurrency || "USD");
     setImageUrl("");
+    setInitialStock("");
+    setInitialCost("");
   };
 
   const filteredProducts = products.filter(p => 
@@ -516,6 +531,34 @@ export const SupplierProducts: React.FC<SupplierProductsProps> = ({
                   </Select>
                 </div>
               </div>
+
+              {!editingProduct && (
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-1">Initial Stock Level</Label>
+                    <Input 
+                      type="number"
+                      min="0"
+                      placeholder="e.g. 50"
+                      value={initialStock}
+                      onChange={(e) => setInitialStock(e.target.value)}
+                      className="h-14 rounded-2xl bg-zinc-50 border-none font-bold text-zinc-900 placeholder:text-zinc-400"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-1">Manufacturing Unit Cost ({currency})</Label>
+                    <Input 
+                      type="number"
+                      step="0.01"
+                      min="0.00"
+                      placeholder="e.g. 1.20"
+                      value={initialCost}
+                      onChange={(e) => setInitialCost(e.target.value)}
+                      className="h-14 rounded-2xl bg-zinc-50 border-none font-bold text-zinc-900 placeholder:text-zinc-400"
+                    />
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-4">
                 <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 ml-1">Visual Asset</Label>
