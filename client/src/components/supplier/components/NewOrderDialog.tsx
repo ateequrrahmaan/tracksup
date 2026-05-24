@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Trash2, Package, AlertTriangle } from "lucide-react";
+import { toast } from "sonner";
 
 interface NewOrderDialogProps {
   isOpen: boolean;
@@ -35,8 +36,8 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
   onSubmit 
 }) => {
   const { preferredCurrency } = useAuth();
-  const [orderItems, setOrderItems] = useState<OrderItem[]>([
-    { name: "", quantity: 1, price: 0 }
+  const [orderItems, setOrderItems] = useState<(OrderItem & { productId?: string })[]>([
+    { productId: "", name: "", quantity: 1, price: 0 }
   ]);
   const [selectedRetailerId, setSelectedRetailerId] = useState("");
   const [assignedEmployeeId, setAssignedEmployeeId] = useState("");
@@ -48,11 +49,21 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
     if (preferredCurrency) setCurrency(preferredCurrency);
   }, [preferredCurrency]);
 
+  // Clean reset when modal re-opens
+  useEffect(() => {
+    if (isOpen) {
+      setOrderItems([{ productId: "", name: "", quantity: 1, price: 0 }]);
+      setSelectedRetailerId("");
+      setAssignedEmployeeId("");
+      setDeliveryDate(new Date().toISOString().split('T')[0]);
+    }
+  }, [isOpen]);
+
   const grandTotal = orderItems.reduce((sum, item) => sum + (item.quantity * item.price), 0);
   const currentSymbol = getCurrencySymbol(currency);
 
   const addOrderItem = () => {
-    setOrderItems([...orderItems, { name: "", quantity: 1, price: 0 }]);
+    setOrderItems([...orderItems, { productId: "", name: "", quantity: 1, price: 0 }]);
   };
 
   const removeOrderItem = (index: number) => {
@@ -61,7 +72,7 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
     }
   };
 
-  const updateOrderItem = (index: number, field: keyof OrderItem, value: string | number) => {
+  const updateOrderItem = (index: number, field: string, value: string | number) => {
     const newItems = [...orderItems];
     newItems[index] = { ...newItems[index], [field]: value };
     setOrderItems(newItems);
@@ -69,20 +80,50 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedRetailerId) return;
+    if (!selectedRetailerId) {
+      toast.error("Please select a target retailer node.");
+      return;
+    }
+
+    if (orderItems.length === 0 || orderItems.some(item => !item.name)) {
+      toast.error("Please add and identify at least one product catalog entry.");
+      return;
+    }
+
+    // Validate stock constraints
+    for (const item of orderItems) {
+      const matched = products.find(p => p.name.toLowerCase() === item.name.toLowerCase());
+      if (matched) {
+        const stock = typeof matched.stock === "number" ? matched.stock : 0;
+        if (item.quantity > stock) {
+          toast.error(`Deficit: Only ${stock} units of "${matched.name}" available in stock (Requested: ${item.quantity}). Please restock before organizing this shipment.`);
+          return;
+        }
+      } else {
+        toast.error(`Could not locate product: ${item.name} in master catalog.`);
+        return;
+      }
+    }
     
     setIsSubmitting(true);
     try {
+      // Remove local productId before submitting items to backend service
+      const cleanItems: OrderItem[] = orderItems.map(({ name, quantity, price }) => ({
+        name,
+        quantity,
+        price
+      }));
+
       await onSubmit({
         retailerId: selectedRetailerId,
         employeeId: assignedEmployeeId === "unassigned" ? "" : assignedEmployeeId,
-        items: orderItems,
+        items: cleanItems,
         deliveryDate,
         totalAmount: grandTotal,
         currency
       });
       // Reset
-      setOrderItems([{ name: "", quantity: 1, price: 0 }]);
+      setOrderItems([{ productId: "", name: "", quantity: 1, price: 0 }]);
       setSelectedRetailerId("");
       setAssignedEmployeeId("");
       setDeliveryDate(new Date().toISOString().split('T')[0]);
@@ -182,17 +223,20 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
                         <TableCell className="px-4 py-3">
                           <div className="flex flex-col gap-2 min-w-[200px]">
                             <Select
-                              value={products.find(p => p.name.toLowerCase() === item.name.toLowerCase())?.id || ""}
+                              value={item.productId || ""}
                               onValueChange={(val) => {
                                 const prod = products.find(p => p.id === val);
                                 if (prod) {
+                                  updateOrderItem(index, "productId", prod.id);
                                   updateOrderItem(index, "name", prod.name);
                                   updateOrderItem(index, "price", prod.price);
                                 }
                               }}
                             >
                               <SelectTrigger className="h-10 rounded-xl border-zinc-100 bg-zinc-50 font-bold uppercase text-xs italic">
-                                <SelectValue placeholder="Identify product catalog..." />
+                                <SelectValue placeholder="Identify product catalog...">
+                                  {item.name ? item.name : undefined}
+                                </SelectValue>
                               </SelectTrigger>
                               <SelectContent className="rounded-xl border-none shadow-2xl">
                                 {products.map(p => (

@@ -50,7 +50,7 @@ const deductInventoryStock = async (firestore: admin.firestore.Firestore, orderD
   let updatedCount = 0;
 
   for (const item of orderData.items || []) {
-    const matchedProduct = productsInDb.find(p => p.name?.toLowerCase() === item.name?.toLowerCase());
+    const matchedProduct = productsInDb.find(p => p.name?.trim().toLowerCase() === item.name?.trim().toLowerCase());
     if (matchedProduct) {
       const currentStock = typeof matchedProduct.stock === "number" ? matchedProduct.stock : 0;
       const pRef = firestore.collection("products").doc(matchedProduct.id);
@@ -84,7 +84,7 @@ const restoreInventoryStock = async (firestore: admin.firestore.Firestore, order
   let restoredCount = 0;
 
   for (const item of orderData.items || []) {
-    const matchedProduct = productsInDb.find(p => p.name?.toLowerCase() === item.name?.toLowerCase());
+    const matchedProduct = productsInDb.find(p => p.name?.trim().toLowerCase() === item.name?.trim().toLowerCase());
     if (matchedProduct) {
       const currentStock = typeof matchedProduct.stock === "number" ? matchedProduct.stock : 0;
       const pRef = firestore.collection("products").doc(matchedProduct.id);
