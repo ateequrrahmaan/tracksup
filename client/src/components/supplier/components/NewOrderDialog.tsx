@@ -178,21 +178,16 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
                   </TableHeader>
                   <TableBody>
                     {orderItems.map((item, index) => (
-                      <TableRow key={index} className="h-16 border-b border-zinc-50 group">
+                       <TableRow key={index} className="h-16 border-b border-zinc-50 group">
                         <TableCell className="px-4 py-3">
                           <div className="flex flex-col gap-2 min-w-[200px]">
                             <Select
-                              value={products.find(p => p.name.toLowerCase() === item.name.toLowerCase())?.id || (item.name ? "custom" : "")}
+                              value={products.find(p => p.name.toLowerCase() === item.name.toLowerCase())?.id || ""}
                               onValueChange={(val) => {
-                                if (val === "custom") {
-                                  updateOrderItem(index, "name", "");
-                                  updateOrderItem(index, "price", 0);
-                                } else {
-                                  const prod = products.find(p => p.id === val);
-                                  if (prod) {
-                                    updateOrderItem(index, "name", prod.name);
-                                    updateOrderItem(index, "price", prod.price);
-                                  }
+                                const prod = products.find(p => p.id === val);
+                                if (prod) {
+                                  updateOrderItem(index, "name", prod.name);
+                                  updateOrderItem(index, "price", prod.price);
                                 }
                               }}
                             >
@@ -200,9 +195,6 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
                                 <SelectValue placeholder="Identify product catalog..." />
                               </SelectTrigger>
                               <SelectContent className="rounded-xl border-none shadow-2xl">
-                                <SelectItem value="custom" className="font-bold text-[10px] tracking-widest text-zinc-400 uppercase">
-                                  Custom Item / Enter Manually
-                                </SelectItem>
                                 {products.map(p => (
                                   <SelectItem key={p.id} value={p.id} className="font-bold uppercase text-[10px] tracking-widest mb-1">
                                     {p.name} (Stock: {p.stock !== undefined ? p.stock : 0})
@@ -210,17 +202,6 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
                                 ))}
                               </SelectContent>
                             </Select>
-
-                            {/* Show manual text input if Custom or not matched */}
-                            {(!products.find(p => p.name.toLowerCase() === item.name.toLowerCase()) || !item.name) && (
-                              <Input 
-                                placeholder="Manual Designation" 
-                                value={item.name}
-                                onChange={(e) => updateOrderItem(index, "name", e.target.value)}
-                                className="h-10 rounded-xl border-zinc-100 bg-zinc-50 font-bold uppercase text-xs italic"
-                                required
-                              />
-                            )}
 
                             {/* Show inventory indicator & warnings if matched */}
                             {(() => {
@@ -254,10 +235,11 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
                           <Input 
                             type="number" 
                             step="0.01" 
-                            min="0.01"
+                            min="0.00"
                             value={item.price}
-                            onChange={(e) => updateOrderItem(index, "price", parseFloat(e.target.value) || 0)}
-                            className="h-10 w-24 rounded-xl border-zinc-100 bg-zinc-50 font-black text-xs text-center"
+                            readOnly
+                            disabled
+                            className="h-10 w-24 rounded-xl border-zinc-100 bg-zinc-100 font-black text-xs text-center text-zinc-500 cursor-not-allowed"
                             required
                           />
                         </TableCell>

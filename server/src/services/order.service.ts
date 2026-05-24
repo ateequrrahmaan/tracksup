@@ -36,6 +36,72 @@ export const getOrdersByOrg = async (orgId: string, userId?: string) => {
   });
 };
 
+// Helper to deduct stock when order is delivered
+const deductInventoryStock = async (firestore: admin.firestore.Firestore, orderData: any) => {
+  const supplierId = orderData.supplierId;
+  if (!supplierId) return;
+
+  const productsSnapshot = await firestore.collection("products")
+    .where("supplierId", "==", supplierId)
+    .get();
+
+  const productsInDb = productsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+  const batch = firestore.batch();
+  let updatedCount = 0;
+
+  for (const item of orderData.items || []) {
+    const matchedProduct = productsInDb.find(p => p.name?.toLowerCase() === item.name?.toLowerCase());
+    if (matchedProduct) {
+      const currentStock = typeof matchedProduct.stock === "number" ? matchedProduct.stock : 0;
+      const pRef = firestore.collection("products").doc(matchedProduct.id);
+      // Deduct stock, ensuring it doesn't go below 0
+      const newStock = Math.max(0, currentStock - item.quantity);
+      batch.update(pRef, {
+        stock: newStock,
+        updatedAt: FieldValue.serverTimestamp()
+      });
+      updatedCount++;
+    }
+  }
+
+  if (updatedCount > 0) {
+    await batch.commit();
+    console.log(`[OrderService] Deducted inventory stock for ${updatedCount} products upon delivery of order ${orderData.id || ""}`);
+  }
+};
+
+// Helper to restore stock when order transitions from delivered to cancelled/deleted/etc.
+const restoreInventoryStock = async (firestore: admin.firestore.Firestore, orderData: any) => {
+  const supplierId = orderData.supplierId;
+  if (!supplierId) return;
+
+  const productsSnapshot = await firestore.collection("products")
+    .where("supplierId", "==", supplierId)
+    .get();
+
+  const productsInDb = productsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+  const batch = firestore.batch();
+  let restoredCount = 0;
+
+  for (const item of orderData.items || []) {
+    const matchedProduct = productsInDb.find(p => p.name?.toLowerCase() === item.name?.toLowerCase());
+    if (matchedProduct) {
+      const currentStock = typeof matchedProduct.stock === "number" ? matchedProduct.stock : 0;
+      const pRef = firestore.collection("products").doc(matchedProduct.id);
+      batch.update(pRef, {
+        stock: currentStock + item.quantity,
+        updatedAt: FieldValue.serverTimestamp()
+      });
+      restoredCount++;
+    }
+  }
+
+  if (restoredCount > 0) {
+    await batch.commit();
+    console.log(`[OrderService] Restored stock of ${restoredCount} products due to delivery cancel/reversion of order ${orderData.id || ""}`);
+  }
+};
+
 export const deliverOrder = async (orderId: string, orgId: string, deliveryData: any) => {
   const firestore = db();
   if (!firestore) throw new Error("Firestore not initialized");
@@ -58,6 +124,8 @@ export const deliverOrder = async (orderId: string, orgId: string, deliveryData:
     throw new Error("Unauthorized to complete this delivery");
   }
 
+  const prevStatus = orderData.status;
+
   await orderRef.update({
     status: "delivered",
     payment_status: deliveryData.paymentStatus,
@@ -67,6 +135,10 @@ export const deliverOrder = async (orderId: string, orgId: string, deliveryData:
     deliveredBy: deliveryData.userId,
     note: deliveryData.note || ""
   });
+
+  if (prevStatus !== "delivered") {
+    await deductInventoryStock(firestore, { id: orderId, ...orderData });
+  }
 
   return { id: orderId, ...orderData, status: "delivered" };
 };
@@ -91,27 +163,14 @@ export const updateOrderStatus = async (orderId: string, orgId: string, status: 
     throw new Error("Unauthorized to update this order status");
   }
 
-  // If order is cancelled, we return the stock of those products to inventory
-  if (status === "cancelled" && orderData.status !== "cancelled") {
-    const productsSnapshot = await firestore.collection("products")
-      .where("supplierId", "==", orderData.supplierId)
-      .get();
-    const productsInDb = productsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
-    const batch = firestore.batch();
-    
-    for (const item of orderData.items || []) {
-      const matchedProduct = productsInDb.find(p => p.name?.toLowerCase() === item.name?.toLowerCase());
-      if (matchedProduct) {
-        const currentStock = typeof matchedProduct.stock === "number" ? matchedProduct.stock : 0;
-        const pRef = firestore.collection("products").doc(matchedProduct.id);
-        batch.update(pRef, {
-          stock: currentStock + item.quantity,
-          updatedAt: FieldValue.serverTimestamp()
-        });
-      }
-    }
-    await batch.commit();
-    console.log(`[OrderService] Returned stock from cancelled order ${orderId}`);
+  const prevStatus = orderData.status;
+
+  // Perform stock adjustments based on status transitions
+  if (status === "delivered" && prevStatus !== "delivered") {
+    await deductInventoryStock(firestore, { id: orderId, ...orderData });
+  } else if (prevStatus === "delivered" && status !== "delivered") {
+    // If it was delivered and now is either cancelled, reverted, assigned, or pending:
+    await restoreInventoryStock(firestore, { id: orderId, ...orderData });
   }
 
   await orderRef.update({
@@ -210,42 +269,6 @@ export const createOrder = async (orgId: string, supplierId: string, data: any) 
   // Remove userId from data to avoid double storage
   delete orderData.userId;
 
-  // 3b. Verify product stock constraints and update stocks automatically
-  const productsSnapshot = await firestore.collection("products")
-    .where("supplierId", "==", supplierId)
-    .get();
-
-  const productsInDb = productsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
-  const batchUpdates: { docId: string; newStock: number }[] = [];
-
-  for (const item of data.items || []) {
-    const matchedProduct = productsInDb.find(p => p.name?.toLowerCase() === item.name?.toLowerCase());
-    if (matchedProduct) {
-      const currentStock = typeof matchedProduct.stock === "number" ? matchedProduct.stock : 0;
-      if (currentStock < item.quantity) {
-        throw new Error(`Insufficient stock for "${item.name}". Available stock: ${currentStock}, Requested: ${item.quantity}. Please increase stock in the Inventory console.`);
-      }
-      batchUpdates.push({
-        docId: matchedProduct.id,
-        newStock: currentStock - item.quantity
-      });
-    }
-  }
-
-  // Atomically update stocks as part of order genesis
-  if (batchUpdates.length > 0) {
-    const batch = firestore.batch();
-    for (const update of batchUpdates) {
-      const pRef = firestore.collection("products").doc(update.docId);
-      batch.update(pRef, {
-        stock: update.newStock,
-        updatedAt: FieldValue.serverTimestamp()
-      });
-    }
-    await batch.commit();
-    console.log(`[OrderService] Automatically deducted stock for ${batchUpdates.length} products`);
-  }
-
   console.log("[OrderService] Attempting to save order to Firestore...");
   const docRef = await firestore.collection("orders").add(orderData);
   return { id: docRef.id, ...orderData };
@@ -312,6 +335,11 @@ export const deleteOrder = async (orderId: string, orgId: string) => {
   if (orderData.supplierId !== orgId) {
     console.error(`[OrderService] Unauthorized delete: order supplier=${orderData.supplierId}, caller=${orgId}`);
     throw new Error("Unauthorized: Only the supplier can delete this order");
+  }
+
+  // Restore inventory if we are deleting an already delivered order
+  if (orderData.status === "delivered") {
+    await restoreInventoryStock(firestore, { id: orderId, ...orderData });
   }
 
   await orderRef.delete();
