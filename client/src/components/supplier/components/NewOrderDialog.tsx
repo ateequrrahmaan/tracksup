@@ -72,10 +72,12 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
     }
   };
 
-  const updateOrderItem = (index: number, field: string, value: string | number) => {
-    const newItems = [...orderItems];
-    newItems[index] = { ...newItems[index], [field]: value };
-    setOrderItems(newItems);
+  const updateOrderItem = (index: number, updates: Partial<OrderItem & { productId?: string }>) => {
+    setOrderItems(prev => {
+      const newItems = [...prev];
+      newItems[index] = { ...newItems[index], ...updates };
+      return newItems;
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -134,22 +136,22 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[750px] max-h-[90vh] overflow-y-auto rounded-[2.5rem] p-8 border-none shadow-2xl">
+      <DialogContent className="sm:max-w-[750px] w-[95vw] max-h-[90vh] overflow-y-auto rounded-[2rem] sm:rounded-[2.5rem] p-4 sm:p-8 border-none shadow-2xl">
         <form onSubmit={handleSubmit} className="space-y-8">
           <DialogHeader>
             <div className="flex items-center gap-4 mb-2">
-                <div className="h-12 w-12 rounded-2xl bg-zinc-900 text-white flex items-center justify-center">
+                <div className="h-12 w-12 rounded-2xl bg-zinc-900 text-white flex items-center justify-center shrink-0">
                     <Package className="h-6 w-6" />
                 </div>
                 <div>
-                    <DialogTitle className="text-2xl font-black uppercase italic tracking-tighter">Manifest Genesis</DialogTitle>
+                    <DialogTitle className="text-xl sm:text-2xl font-black uppercase italic tracking-tighter">Manifest Genesis</DialogTitle>
                     <DialogDescription className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">Initialize a new distribution vector</DialogDescription>
                 </div>
             </div>
           </DialogHeader>
           
           <div className="grid gap-8">
-            <div className="grid md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 <div className="space-y-2">
                     <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 italic">Target Retailer Node</Label>
                     <Select 
@@ -179,7 +181,7 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
                     />
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-2 sm:col-span-2 lg:col-span-1">
                     <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 italic">Currency Vector</Label>
                     <Select 
                         value={currency} 
@@ -206,7 +208,8 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
                 </Button>
               </div>
 
-              <div className="border border-zinc-100 rounded-[2rem] overflow-hidden bg-white shadow-sm">
+              {/* Desktop Table View: visible on md and up */}
+              <div className="hidden md:block border border-zinc-100 rounded-[2rem] overflow-hidden bg-white shadow-sm">
                 <Table>
                   <TableHeader className="bg-zinc-50">
                     <TableRow className="h-12 border-none">
@@ -227,9 +230,11 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
                               onValueChange={(val) => {
                                 const prod = products.find(p => p.id === val);
                                 if (prod) {
-                                  updateOrderItem(index, "productId", prod.id);
-                                  updateOrderItem(index, "name", prod.name);
-                                  updateOrderItem(index, "price", prod.price);
+                                  updateOrderItem(index, {
+                                    productId: prod.id,
+                                    name: prod.name,
+                                    price: prod.price
+                                  });
                                 }
                               }}
                             >
@@ -270,7 +275,7 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
                             type="number" 
                             min="1"
                             value={item.quantity}
-                            onChange={(e) => updateOrderItem(index, "quantity", parseInt(e.target.value) || 0)}
+                            onChange={(e) => updateOrderItem(index, { quantity: parseInt(e.target.value) || 0 })}
                             className="h-10 w-16 rounded-xl border-zinc-100 bg-zinc-50 font-black text-xs text-center"
                             required
                           />
@@ -307,6 +312,107 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
                   </TableBody>
                 </Table>
               </div>
+
+              {/* Mobile Card Stack View: visible below md */}
+              <div className="block md:hidden space-y-4">
+                {orderItems.map((item, index) => (
+                  <div key={index} className="border border-zinc-100 rounded-2xl p-4 bg-zinc-50/50 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[9px] font-black uppercase tracking-wider text-zinc-400 italic">Component #{index + 1}</span>
+                      <Button 
+                        type="button" 
+                        variant="ghost" 
+                        size="icon" 
+                        onClick={() => removeOrderItem(index)}
+                        disabled={orderItems.length === 1}
+                        className="h-8 w-8 rounded-lg text-zinc-300 hover:text-rose-500 hover:bg-rose-50 disabled:opacity-30"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+
+                    <div className="space-y-1">
+                      <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Product Designation</Label>
+                      <Select
+                        value={item.productId || ""}
+                        onValueChange={(val) => {
+                          const prod = products.find(p => p.id === val);
+                          if (prod) {
+                            updateOrderItem(index, {
+                              productId: prod.id,
+                              name: prod.name,
+                              price: prod.price
+                            });
+                          }
+                        }}
+                      >
+                        <SelectTrigger className="h-11 rounded-xl border-zinc-100 bg-white font-bold uppercase text-xs italic">
+                          <SelectValue placeholder="Identify catalog...">
+                            {item.name ? item.name : undefined}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent className="rounded-xl border-none shadow-2xl">
+                          {products.map(p => (
+                            <SelectItem key={p.id} value={p.id} className="font-bold uppercase text-[10px] tracking-widest mb-1">
+                              {p.name} (Stock: {p.stock !== undefined ? p.stock : 0})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      
+                      {/* Show inventory indicator & warnings if matched */}
+                      {(() => {
+                        const matched = products.find(p => p.name.toLowerCase() === item.name.toLowerCase());
+                        if (matched) {
+                          const stock = typeof matched.stock === "number" ? matched.stock : 0;
+                          const tooLow = item.quantity > stock;
+                          return (
+                            <div className="flex items-center gap-1.5 pt-1">
+                              <span className={`text-[9px] font-black uppercase tracking-wider ${tooLow ? "text-rose-600 animate-pulse" : "text-emerald-600"}`}>
+                                {tooLow ? `Deficit: ${item.quantity - stock} units short! (Stock: ${stock})` : `In Stock: ${stock} available`}
+                              </span>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="space-y-1">
+                        <Label className="text-[9px] font-black uppercase text-zinc-500">Qty</Label>
+                        <Input 
+                          type="number" 
+                          min="1"
+                          value={item.quantity}
+                          onChange={(e) => updateOrderItem(index, { quantity: parseInt(e.target.value) || 0 })}
+                          className="h-10 rounded-xl border-zinc-100 bg-white font-black text-xs text-center"
+                          required
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[9px] font-black uppercase text-zinc-500">Unit Price</Label>
+                        <Input 
+                          type="number" 
+                          step="0.01" 
+                          min="0.00"
+                          value={item.price}
+                          readOnly
+                          disabled
+                          className="h-10 rounded-xl border-zinc-100 bg-zinc-100 font-black text-xs text-center text-zinc-500 cursor-not-allowed"
+                          required
+                        />
+                      </div>
+                      <div className="space-y-1 text-center">
+                        <Label className="text-[9px] font-black uppercase text-zinc-500 block">Calculated</Label>
+                        <div className="h-10 flex items-center justify-center font-black italic text-xs text-zinc-900 bg-white border border-zinc-100 rounded-xl">
+                          {currentSymbol}{(item.quantity * item.price).toFixed(2)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
 
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-t border-dashed border-zinc-200 pt-8">
@@ -329,12 +435,12 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
                 </div>
                 <div className="text-right">
                     <p className="text-[10px] font-black uppercase text-zinc-400 tracking-widest mb-1 italic">Venture Capital Total ({currency})</p>
-                    <p className="text-5xl font-black italic tracking-tighter text-zinc-900">{currentSymbol}{grandTotal.toFixed(2)}</p>
+                    <p className="text-3xl sm:text-5xl font-black italic tracking-tighter text-zinc-900">{currentSymbol}{grandTotal.toFixed(2)}</p>
                 </div>
             </div>
           </div>
           
-          <DialogFooter className="gap-3 pt-4">
+          <DialogFooter className="flex-col sm:flex-row gap-3 pt-4">
             <Button type="button" variant="outline" className="flex-1 h-14 rounded-2xl font-black uppercase tracking-widest text-[11px] italic border-zinc-200" onClick={() => onOpenChange(false)}>Abort Mission</Button>
             <Button type="submit" disabled={isSubmitting} className="flex-1 h-14 rounded-2xl font-black uppercase tracking-widest text-[11px] italic bg-zinc-900 text-white hover:bg-zinc-800 shadow-2xl">
                 {isSubmitting ? "PROCESSING..." : "ACTIVATE MANIFEST"}
