@@ -266,21 +266,32 @@ export const SupplierDashboard = () => {
 
     const trendData = Array.from(trendMap.entries()).map(([name, value]) => ({ name, value }));
 
-    // Product Breakdown
-    const productMap = new Map<string, { name: string, quantity: number, revenue: number }>();
+    // Product Breakdown with Cost and Profit
+    const productMap = new Map<string, { name: string, quantity: number, revenue: number, cost: number, profit: number }>();
+    let totalCost = 0;
+    
     orders.forEach(o => {
       o.items?.forEach(item => {
-        const current = productMap.get(item.name) || { name: item.name, quantity: 0, revenue: 0 };
+        const matched = products.find(p => p.name.toLowerCase().trim() === item.name.toLowerCase().trim());
+        const itemCost = item.quantity * (matched?.unitCost || 0);
+        const itemRevenue = item.quantity * item.price;
+        const itemProfit = itemRevenue - itemCost;
+        
+        totalCost += itemCost;
+        
+        const current = productMap.get(item.name) || { name: item.name, quantity: 0, revenue: 0, cost: 0, profit: 0 };
         productMap.set(item.name, {
           name: item.name,
           quantity: current.quantity + item.quantity,
-          revenue: current.revenue + (item.quantity * item.price)
+          revenue: current.revenue + itemRevenue,
+          cost: current.cost + itemCost,
+          profit: current.profit + itemProfit
         });
       });
     });
     const productPerformance = Array.from(productMap.values())
       .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, 5);
+      .slice(0, 10); // Increase slice limit for a more complete matrix
 
     // Efficiency Calculation
     const deliveredOrders = orders.filter(o => o.status === 'delivered' && o.delivered_at);
@@ -304,6 +315,8 @@ export const SupplierDashboard = () => {
       totalOrders: orders.length,
       totalRevenue: revenue,
       totalCollected: collected,
+      totalCost,
+      totalProfit: revenue - totalCost,
       outstandingAmount: revenue - collected,
       paymentBreakdown: {
         paid: orders.filter(o => o.payment_status === "paid").length,
@@ -316,7 +329,7 @@ export const SupplierDashboard = () => {
       productPerformance,
       avgDeliveryHours
     };
-  }, [orders, employees]);
+  }, [orders, employees, products]);
 
   // Handlers
   const handleCreateOrder = async (data: any) => {

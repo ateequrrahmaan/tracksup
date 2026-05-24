@@ -1,6 +1,9 @@
 import React from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/lib/auth-context";
+import { formatCurrency } from "@/constants";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { 
   BarChart, 
   Bar, 
@@ -33,6 +36,7 @@ interface SupplierInsightsProps {
 }
 
 export const SupplierInsights: React.FC<SupplierInsightsProps> = ({ stats }) => {
+  const { preferredCurrency } = useAuth();
   const pieData = [
     { name: "Paid", value: stats.paymentBreakdown?.paid || 0, color: "#10b981" },
     { name: "Credit", value: stats.paymentBreakdown?.credit || 0, color: "#3b82f6" },
@@ -185,6 +189,98 @@ export const SupplierInsights: React.FC<SupplierInsightsProps> = ({ stats }) => 
           </div>
         </Card>
       </div>
+
+      <Card className="rounded-[2.5rem] bg-white p-6 sm:p-10 border-none shadow-sm">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-8 text-zinc-900 border-b border-zinc-100 pb-8">
+          <div>
+            <h3 className="text-xl font-black uppercase italic tracking-tight flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-zinc-900" />
+              Product Profitability Matrix
+            </h3>
+            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mt-1">Detailed analysis of manufacturing costs, sold revenue, and net profit margins</p>
+          </div>
+          
+          <div className="flex flex-wrap gap-4">
+            <div className="bg-zinc-50 rounded-2xl p-4 text-left border border-zinc-100/50 min-w-[120px]">
+              <span className="text-[8px] font-black uppercase tracking-widest text-zinc-400 block mb-1">Total Mfg Cost</span>
+              <span className="text-sm font-black italic text-zinc-700">{formatCurrency(stats.totalCost || 0, preferredCurrency)}</span>
+            </div>
+            <div className="bg-emerald-50/50 rounded-2xl p-4 text-left border border-emerald-100/30 min-w-[120px]">
+              <span className="text-[8px] font-black uppercase tracking-widest text-emerald-600 block mb-1">Net Profit Vector</span>
+              <span className="text-sm font-black italic text-emerald-700">{formatCurrency(stats.totalProfit || 0, preferredCurrency)}</span>
+            </div>
+            <div className="bg-zinc-950 text-white rounded-2xl p-4 text-left min-w-[120px]">
+              <span className="text-[8px] font-black uppercase tracking-widest text-zinc-400 block mb-1">Average Margin</span>
+              <span className="text-sm font-black italic">
+                {stats.totalRevenue > 0 ? Math.round((stats.totalProfit / stats.totalRevenue) * 100) : 0}%
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow className="border-none hover:bg-transparent">
+                <TableHead className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Product Name</TableHead>
+                <TableHead className="text-[9px] font-black uppercase tracking-widest text-zinc-400 text-center">Qty Sold</TableHead>
+                <TableHead className="text-[9px] font-black uppercase tracking-widest text-zinc-400 text-right">Gross Sales</TableHead>
+                <TableHead className="text-[9px] font-black uppercase tracking-widest text-zinc-400 text-right">Total Mfg Cost</TableHead>
+                <TableHead className="text-[9px] font-black uppercase tracking-widest text-zinc-400 text-right">Net Profit</TableHead>
+                <TableHead className="text-[9px] font-black uppercase tracking-widest text-zinc-400 text-right">Profit Margin</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {stats.productPerformance?.map((product: any, i: number) => {
+                const mfgCost = product.cost || 0;
+                const revenue = product.revenue || 0;
+                const profit = product.profit !== undefined ? product.profit : (revenue - mfgCost);
+                const marginPercent = revenue > 0 ? Math.round((profit / revenue) * 105) % 100 : 0; // standard margin
+                const realMarginPercent = revenue > 0 ? Math.round((profit / revenue) * 100) : 0;
+                
+                return (
+                  <TableRow key={product.name} className="border-b border-zinc-100 hover:bg-zinc-50/50 h-16">
+                    <TableCell className="font-bold uppercase text-[11px] text-zinc-800">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[9px] font-black text-zinc-400">0{i+1}</span>
+                        {product.name}
+                      </div>
+                    </TableCell>
+                    <TableCell className="font-black text-xs text-zinc-600 text-center">
+                      {product.quantity}
+                    </TableCell>
+                    <TableCell className="font-black text-xs text-zinc-700 text-right">
+                      {formatCurrency(revenue, preferredCurrency)}
+                    </TableCell>
+                    <TableCell className="font-black text-xs text-zinc-500 text-right italic">
+                      {formatCurrency(mfgCost, preferredCurrency)}
+                    </TableCell>
+                    <TableCell className={`font-black text-xs text-right italic ${profit >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                      {formatCurrency(profit, preferredCurrency)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <span className={`inline-flex px-2.5 py-1 rounded-xl text-[9px] font-black uppercase tracking-wider ${
+                        realMarginPercent > 40 ? "bg-emerald-50 text-emerald-700" :
+                        realMarginPercent > 15 ? "bg-zinc-50 text-zinc-700" :
+                        realMarginPercent > 0 ? "bg-amber-50 text-amber-700" : "bg-rose-50 text-rose-700"
+                      }`}>
+                        {realMarginPercent}%
+                      </span>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+              {(!stats.productPerformance || stats.productPerformance.length === 0) && (
+                <TableRow>
+                  <TableCell colSpan={6} className="h-32 text-center text-[10px] font-black uppercase tracking-widest text-zinc-400 italic">
+                    No sales recorded yet to analyze profitability.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <Card className="rounded-[2.5rem] bg-white p-6 sm:p-10 border-none shadow-sm">
