@@ -62,7 +62,34 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
   const grandTotal = orderItems.reduce((sum, item) => sum + (item.quantity * item.price), 0);
   const currentSymbol = getCurrencySymbol(currency);
 
+  const getProductStockStatus = (prodId: string, currentIndex: number) => {
+    const prod = products.find(p => p.id === prodId);
+    const stock = prod ? (typeof prod.stock === "number" ? prod.stock : 0) : 0;
+    const allocatedInOtherRows = orderItems.reduce((sum, item, idx) => {
+      if (idx !== currentIndex && item.productId === prodId) {
+        return sum + item.quantity;
+      }
+      return sum;
+    }, 0);
+    const remaining = Math.max(0, stock - allocatedInOtherRows);
+    return { stock, allocatedInOtherRows, remaining };
+  };
+
   const addOrderItem = () => {
+    if (orderItems.length >= products.length) {
+      toast.error("All product catalog items have already been allocated.");
+      return;
+    }
+    if (products.length > 0) {
+      const allDepleted = products.every(p => {
+        const { remaining } = getProductStockStatus(p.id, -1);
+        return remaining <= 0;
+      });
+      if (allDepleted) {
+        toast.error("Deficit warning: All physical inventory units from your catalog are fully allocated in this configuration.");
+        return;
+      }
+    }
     setOrderItems([...orderItems, { productId: "", name: "", quantity: 1, price: 0 }]);
   };
 
@@ -89,6 +116,14 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
 
     if (orderItems.length === 0 || orderItems.some(item => !item.name)) {
       toast.error("Please add and identify at least one product catalog entry.");
+      return;
+    }
+
+    // Check for duplicates
+    const productNames = orderItems.map(item => item.name.toLowerCase().trim());
+    const uniqueProductNames = new Set(productNames);
+    if (productNames.length !== uniqueProductNames.size) {
+      toast.error("Duplicate products selected. Please adjust quantities of existing items instead of adding multiple rows for the same product.");
       return;
     }
 
@@ -239,19 +274,31 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
                               }}
                             >
                               <SelectTrigger className="h-10 rounded-xl border-zinc-100 bg-zinc-50 font-bold uppercase text-xs italic">
-                                <SelectValue placeholder="Identify product catalog...">
-                                  {item.name ? item.name : undefined}
-                                </SelectValue>
+                                {item.name ? (
+                                  <span className="truncate">{item.name}</span>
+                                ) : (
+                                  <SelectValue placeholder="Identify product catalog..." />
+                                )}
                               </SelectTrigger>
                               <SelectContent className="rounded-xl border-none shadow-2xl">
-                                {products.map(p => (
-                                  <SelectItem key={p.id} value={p.id} className="font-bold uppercase text-[10px] tracking-widest mb-1">
-                                    {p.name} (Stock: {p.stock !== undefined ? p.stock : 0})
-                                  </SelectItem>
-                                ))}
+                                {products.map(p => {
+                                  const { remaining } = getProductStockStatus(p.id, index);
+                                  const isAlreadySelected = orderItems.some((ot, idx) => idx !== index && ot.productId === p.id);
+                                  const isDisabled = (remaining <= 0 || isAlreadySelected) && item.productId !== p.id;
+                                  return (
+                                    <SelectItem 
+                                      key={p.id} 
+                                      value={p.id} 
+                                      disabled={isDisabled}
+                                      className={`font-bold uppercase text-[10px] tracking-widest mb-1 ${isDisabled ? "opacity-40 cursor-not-allowed" : ""}`}
+                                    >
+                                      {p.name} {isAlreadySelected ? "(Already Selected)" : `(Remaining Stock: ${remaining})`}
+                                    </SelectItem>
+                                  );
+                                })}
                               </SelectContent>
                             </Select>
-
+ 
                             {/* Show inventory indicator & warnings if matched */}
                             {(() => {
                               const matched = products.find(p => p.name.toLowerCase() === item.name.toLowerCase());
@@ -271,14 +318,31 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
                           </div>
                         </TableCell>
                         <TableCell className="px-2">
-                          <Input 
-                            type="number" 
-                            min="1"
-                            value={item.quantity}
-                            onChange={(e) => updateOrderItem(index, { quantity: parseInt(e.target.value) || 0 })}
-                            className="h-10 w-16 rounded-xl border-zinc-100 bg-zinc-50 font-black text-xs text-center"
-                            required
-                          />
+                          {(() => {
+                            const { remaining } = getProductStockStatus(item.productId || "", index);
+                            const maxLimit = item.productId ? remaining : 999999;
+                            return (
+                              <Input 
+                                type="number" 
+                                min="1"
+                                max={maxLimit}
+                                value={item.quantity}
+                                onChange={(e) => {
+                                  let val = parseInt(e.target.value);
+                                  if (isNaN(val) || val < 1) {
+                                    val = 1;
+                                  }
+                                  const clamped = Math.min(val, maxLimit);
+                                  updateOrderItem(index, { quantity: clamped });
+                                  if (val > maxLimit) {
+                                    toast.error(`Exceeded available stock! Max units allowed for this product: ${maxLimit}`);
+                                  }
+                                }}
+                                className="h-10 w-16 rounded-xl border-zinc-100 bg-zinc-50 font-black text-xs text-center"
+                                required
+                              />
+                            );
+                          })()}
                         </TableCell>
                         <TableCell className="px-2">
                           <Input 
@@ -312,7 +376,7 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
                   </TableBody>
                 </Table>
               </div>
-
+ 
               {/* Mobile Card Stack View: visible below md */}
               <div className="block md:hidden space-y-4">
                 {orderItems.map((item, index) => (
@@ -330,7 +394,7 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
-
+ 
                     <div className="space-y-1">
                       <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Product Designation</Label>
                       <Select
@@ -347,16 +411,28 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
                         }}
                       >
                         <SelectTrigger className="h-11 rounded-xl border-zinc-100 bg-white font-bold uppercase text-xs italic">
-                          <SelectValue placeholder="Identify catalog...">
-                            {item.name ? item.name : undefined}
-                          </SelectValue>
+                          {item.name ? (
+                            <span className="truncate">{item.name}</span>
+                          ) : (
+                            <SelectValue placeholder="Identify catalog..." />
+                          )}
                         </SelectTrigger>
                         <SelectContent className="rounded-xl border-none shadow-2xl">
-                          {products.map(p => (
-                            <SelectItem key={p.id} value={p.id} className="font-bold uppercase text-[10px] tracking-widest mb-1">
-                              {p.name} (Stock: {p.stock !== undefined ? p.stock : 0})
-                            </SelectItem>
-                          ))}
+                          {products.map(p => {
+                            const { remaining } = getProductStockStatus(p.id, index);
+                            const isAlreadySelected = orderItems.some((ot, idx) => idx !== index && ot.productId === p.id);
+                            const isDisabled = (remaining <= 0 || isAlreadySelected) && item.productId !== p.id;
+                            return (
+                              <SelectItem 
+                                key={p.id} 
+                                value={p.id} 
+                                disabled={isDisabled}
+                                className={`font-bold uppercase text-[10px] tracking-widest mb-1 ${isDisabled ? "opacity-40 cursor-not-allowed" : ""}`}
+                              >
+                                {p.name} {isAlreadySelected ? "(Already Selected)" : `(Remaining Stock: ${remaining})`}
+                              </SelectItem>
+                            );
+                          })}
                         </SelectContent>
                       </Select>
                       
@@ -377,18 +453,35 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
                         return null;
                       })()}
                     </div>
-
+ 
                     <div className="grid grid-cols-3 gap-3">
                       <div className="space-y-1">
                         <Label className="text-[9px] font-black uppercase text-zinc-500">Qty</Label>
-                        <Input 
-                          type="number" 
-                          min="1"
-                          value={item.quantity}
-                          onChange={(e) => updateOrderItem(index, { quantity: parseInt(e.target.value) || 0 })}
-                          className="h-10 rounded-xl border-zinc-100 bg-white font-black text-xs text-center"
-                          required
-                        />
+                        {(() => {
+                          const { remaining } = getProductStockStatus(item.productId || "", index);
+                          const maxLimit = item.productId ? remaining : 999999;
+                          return (
+                            <Input 
+                              type="number" 
+                              min="1"
+                              max={maxLimit}
+                              value={item.quantity}
+                              onChange={(e) => {
+                                let val = parseInt(e.target.value);
+                                if (isNaN(val) || val < 1) {
+                                  val = 1;
+                                  }
+                                const clamped = Math.min(val, maxLimit);
+                                updateOrderItem(index, { quantity: clamped });
+                                if (val > maxLimit) {
+                                  toast.error(`Exceeded available stock! Max units allowed for this product: ${maxLimit}`);
+                                }
+                              }}
+                              className="h-10 rounded-xl border-zinc-100 bg-white font-black text-xs text-center"
+                              required
+                            />
+                          );
+                        })()}
                       </div>
                       <div className="space-y-1">
                         <Label className="text-[9px] font-black uppercase text-zinc-500">Unit Price</Label>
