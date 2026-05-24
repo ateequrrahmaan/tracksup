@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { SystemUser, OrderItem } from "@/types";
+import { SystemUser, OrderItem, Product } from "@/types";
 import { useAuth } from "@/lib/auth-context";
 import { CURRENCIES, getCurrencySymbol } from "@/constants";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -8,13 +8,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Trash2, Package } from "lucide-react";
+import { Plus, Trash2, Package, AlertTriangle } from "lucide-react";
 
 interface NewOrderDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   retailers: SystemUser[];
   employees: SystemUser[];
+  products: Product[];
   onSubmit: (data: {
     retailerId: string;
     employeeId: string;
@@ -30,6 +31,7 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
   onOpenChange, 
   retailers, 
   employees, 
+  products,
   onSubmit 
 }) => {
   const { preferredCurrency } = useAuth();
@@ -177,14 +179,66 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
                   <TableBody>
                     {orderItems.map((item, index) => (
                       <TableRow key={index} className="h-16 border-b border-zinc-50 group">
-                        <TableCell className="px-4">
-                          <Input 
-                            placeholder="Designation" 
-                            value={item.name}
-                            onChange={(e) => updateOrderItem(index, "name", e.target.value)}
-                            className="h-10 rounded-xl border-zinc-100 bg-zinc-50 font-bold uppercase text-xs italic"
-                            required
-                          />
+                        <TableCell className="px-4 py-3">
+                          <div className="flex flex-col gap-2 min-w-[200px]">
+                            <Select
+                              value={products.find(p => p.name.toLowerCase() === item.name.toLowerCase())?.id || (item.name ? "custom" : "")}
+                              onValueChange={(val) => {
+                                if (val === "custom") {
+                                  updateOrderItem(index, "name", "");
+                                  updateOrderItem(index, "price", 0);
+                                } else {
+                                  const prod = products.find(p => p.id === val);
+                                  if (prod) {
+                                    updateOrderItem(index, "name", prod.name);
+                                    updateOrderItem(index, "price", prod.price);
+                                  }
+                                }
+                              }}
+                            >
+                              <SelectTrigger className="h-10 rounded-xl border-zinc-100 bg-zinc-50 font-bold uppercase text-xs italic">
+                                <SelectValue placeholder="Identify product catalog..." />
+                              </SelectTrigger>
+                              <SelectContent className="rounded-xl border-none shadow-2xl">
+                                <SelectItem value="custom" className="font-bold text-[10px] tracking-widest text-zinc-400 uppercase">
+                                  Custom Item / Enter Manually
+                                </SelectItem>
+                                {products.map(p => (
+                                  <SelectItem key={p.id} value={p.id} className="font-bold uppercase text-[10px] tracking-widest mb-1">
+                                    {p.name} (Stock: {p.stock !== undefined ? p.stock : 0})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+
+                            {/* Show manual text input if Custom or not matched */}
+                            {(!products.find(p => p.name.toLowerCase() === item.name.toLowerCase()) || !item.name) && (
+                              <Input 
+                                placeholder="Manual Designation" 
+                                value={item.name}
+                                onChange={(e) => updateOrderItem(index, "name", e.target.value)}
+                                className="h-10 rounded-xl border-zinc-100 bg-zinc-50 font-bold uppercase text-xs italic"
+                                required
+                              />
+                            )}
+
+                            {/* Show inventory indicator & warnings if matched */}
+                            {(() => {
+                              const matched = products.find(p => p.name.toLowerCase() === item.name.toLowerCase());
+                              if (matched) {
+                                const stock = typeof matched.stock === "number" ? matched.stock : 0;
+                                const tooLow = item.quantity > stock;
+                                return (
+                                  <div className="flex items-center gap-1.5 ml-1">
+                                    <span className={`text-[9px] font-black uppercase tracking-wider ${tooLow ? "text-rose-600 animate-pulse" : "text-emerald-600"}`}>
+                                      {tooLow ? `Deficit: ${item.quantity - stock} units short! (Stock: ${stock})` : `In Stock: ${stock} available`}
+                                    </span>
+                                  </div>
+                                );
+                              }
+                              return null;
+                            })()}
+                          </div>
                         </TableCell>
                         <TableCell className="px-2">
                           <Input 

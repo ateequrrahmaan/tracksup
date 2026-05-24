@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Input } from "@/components/ui/input";
 import { DashboardLayout } from "../shared/DashboardLayout";
 import api from "@/services/api";
-import { Order, SystemUser, Invite } from "@/types";
+import { Order, SystemUser, Invite, Product } from "@/types";
 import { OrderDetailsDialog } from "./components/OrderDetailsDialog";
 import { NewOrderDialog } from "./components/NewOrderDialog";
 import { InviteDialog } from "./components/InviteDialog";
@@ -48,6 +48,7 @@ export const SupplierDashboard = () => {
   const [employees, setEmployees] = useState<SystemUser[]>([]);
   const [retailers, setRetailers] = useState<SystemUser[]>([]);
   const [invites, setInvites] = useState<Invite[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   
   // Modals state
   const [isNewOrderOpen, setIsNewOrderOpen] = useState(false);
@@ -165,10 +166,19 @@ export const SupplierDashboard = () => {
       setInvites(Array.from(uniqueInvites.values()));
     });
 
+    const productsQuery = query(collection(db, "products"), where("supplierId", "==", activeOrg.id));
+    const unsubscribeProducts = onSnapshot(productsQuery, (snapshot) => {
+      const prodList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
+      setProducts(prodList);
+    }, (error) => {
+      console.error("[SupplierDashboard] Products snapshot error:", error);
+    });
+
     return () => {
       unsubscribeOrders();
       unsubscribeMems();
       unsubscribeInvites();
+      unsubscribeProducts();
     };
   }, [user, activeOrg]);
 
@@ -516,6 +526,7 @@ export const SupplierDashboard = () => {
         onOpenChange={setIsNewOrderOpen} 
         retailers={retailers} 
         employees={employees} 
+        products={products}
         onSubmit={handleCreateOrder} 
       />
 
