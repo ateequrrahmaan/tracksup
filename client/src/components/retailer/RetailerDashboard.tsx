@@ -138,7 +138,7 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ order, isOpen, onOp
       </div>
         
       <div className="flex justify-end gap-3 mt-4">
-          {(order.status === "pending" || order.status === "assigned") && (
+          {order.status === "pending" && (
             <Button 
               variant="destructive" 
               className="font-black uppercase tracking-widest text-[10px] italic h-12 px-6 rounded-xl bg-rose-500 hover:bg-rose-600 shadow-lg text-white border-none flex items-center gap-1.5"

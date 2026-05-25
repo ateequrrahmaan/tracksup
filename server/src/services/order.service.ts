@@ -165,6 +165,16 @@ export const updateOrderStatus = async (orderId: string, orgId: string, status: 
 
   const prevStatus = orderData.status;
 
+  // Retailer can ONLY change status to 'cancelled' and ONLY if current status is 'pending'
+  if (isRetailer && !isSupplier && !isAssignedEmployee) {
+    if (status !== "cancelled") {
+      throw new Error("Unauthorized: Retailer can only cancel orders");
+    }
+    if (prevStatus !== "pending") {
+      throw new Error("Order cannot be cancelled after being assigned to a delivery agent");
+    }
+  }
+
   // Perform stock adjustments based on status transitions
   if (status === "delivered" && prevStatus !== "delivered") {
     await deductInventoryStock(firestore, { id: orderId, ...orderData });
