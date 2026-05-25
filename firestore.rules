@@ -136,7 +136,7 @@ service cloud.firestore {
       
       allow update: if isSignedIn() && (
         // Retailer can cancel
-        (isMemberOf(existing().retailerId) && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']) && incoming().status == 'cancelled') ||
+        ((isMemberOf(existing().retailerId) || existing().retailerId == request.auth.uid) && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']) && incoming().status == 'cancelled') ||
         
         // Supplier admin/owner can update everything
         (hasOrgRole(existing().supplierId, ['supplier', 'owner', 'admin'])) ||

@@ -6,8 +6,9 @@ import { safeFormat } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Package, Truck, CheckCircle, Clock, LogOut, Download, Store, Settings, LayoutDashboard, History, CreditCard, FileText, Eye, ChevronRight } from "lucide-react";
+import { Package, Truck, CheckCircle, Clock, LogOut, Download, Store, Settings, LayoutDashboard, History, CreditCard, FileText, Eye, ChevronRight, XCircle } from "lucide-react";
 import { auth } from "@/lib/firebase";
+import { toast } from "sonner";
 import { signOut } from "firebase/auth";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -37,13 +38,14 @@ interface OrderDetailModalProps {
   onGenerateInvoice: (order: Order) => void;
   fetchedOrgs: Record<string, string>;
   organizations: Record<string, any>;
+  onCancelOrder: (orderId: string) => Promise<void>;
 }
 
 import { RetailerSuppliers } from "./components/RetailerSuppliers";
 import { RetailerMarketplace } from "./components/RetailerMarketplace";
 import { SettingsView } from "../shared/SettingsView";
 
-const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ order, isOpen, onOpenChange, onGenerateInvoice, fetchedOrgs, organizations }) => {
+const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ order, isOpen, onOpenChange, onGenerateInvoice, fetchedOrgs, organizations, onCancelOrder }) => {
   if (!order) return null;
   const supplierName = (order as any).supplierName || fetchedOrgs[order.supplierId || ""] || organizations[order.supplierId || ""]?.name || "Supplier";
   
@@ -136,6 +138,20 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ order, isOpen, onOp
       </div>
         
       <div className="flex justify-end gap-3 mt-4">
+          {(order.status === "pending" || order.status === "assigned") && (
+            <Button 
+              variant="destructive" 
+              className="font-black uppercase tracking-widest text-[10px] italic h-12 px-6 rounded-xl bg-rose-500 hover:bg-rose-600 shadow-lg text-white border-none flex items-center gap-1.5"
+              onClick={async () => {
+                if (window.confirm("Are you sure you want to cancel this order? This action cannot be undone.")) {
+                  await onCancelOrder(order.id);
+                }
+              }}
+            >
+              <XCircle className="h-4 w-4 animate-pulse" />
+              Cancel Order
+            </Button>
+          )}
           <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
           <Button onClick={() => onGenerateInvoice(order)}>
             <Download className="mr-2 h-4 w-4" />
@@ -424,17 +440,29 @@ export const RetailerDashboard = () => {
     doc.save(`invoice-${order.id.slice(0, 8)}.pdf`);
   };
 
+  const handleCancelOrder = async (orderId: string) => {
+    try {
+      await api.patch(`/orders/${orderId}/status`, { status: "cancelled" });
+      toast.success("Order has been cancelled successfully.");
+      setIsDetailOpen(false);
+    } catch (error: any) {
+      console.error("Failed to cancel order:", error);
+      const errorMsg = error.response?.data?.error?.message || error.response?.data?.message || "Failed to cancel order.";
+      toast.error(errorMsg);
+    }
+  };
+
   const getStatusStep = (status: string) => {
     const steps = ["pending", "assigned", "out_for_delivery", "delivered"];
     return steps.indexOf(status);
   };
 
   const stats = {
-    totalOrders: orders.length,
-    activeDeliveries: orders.filter(o => o.status !== 'delivered').length,
-    totalSpent: orders.reduce((sum, o) => sum + o.totalAmount, 0),
-    pendingPayments: orders.filter(o => o.payment_status !== 'paid').reduce((sum, o) => sum + o.totalAmount, 0),
-    paidPayments: orders.filter(o => o.payment_status === 'paid').reduce((sum, o) => sum + o.totalAmount, 0)
+    totalOrders: orders.filter(o => o.status !== "cancelled").length,
+    activeDeliveries: orders.filter(o => o.status !== 'delivered' && o.status !== 'cancelled').length,
+    totalSpent: orders.filter(o => o.status !== "cancelled").reduce((sum, o) => sum + o.totalAmount, 0),
+    pendingPayments: orders.filter(o => o.status !== "cancelled" && o.payment_status !== 'paid').reduce((sum, o) => sum + o.totalAmount, 0),
+    paidPayments: orders.filter(o => o.status !== "cancelled" && o.payment_status === 'paid').reduce((sum, o) => sum + o.totalAmount, 0)
   };
 
   return (
@@ -500,7 +528,7 @@ export const RetailerDashboard = () => {
                 </CardHeader>
                 <CardContent className="px-0">
                   <div className="divide-y divide-zinc-50">
-                    {orders.slice(0, 5).map(order => (
+                    {orders.filter(o => o.status !== 'cancelled').slice(0, 5).map(order => (
                       <div 
                         key={`recent-order-${order.id}`} 
                         className="flex items-center justify-between p-6 hover:bg-zinc-50 cursor-pointer transition-all group"
@@ -571,7 +599,7 @@ export const RetailerDashboard = () => {
 
             <div className="grid grid-cols-1 gap-6">
               {orders
-                .filter(o => o.status !== 'delivered')
+                .filter(o => o.status !== 'delivered' && o.status !== 'cancelled')
                 .filter(o => supplierFilter === 'all' || o.supplierId === supplierFilter)
                 .map(order => {
                 const currentStep = getStatusStep(order.status);
@@ -645,7 +673,7 @@ export const RetailerDashboard = () => {
                   </Card>
                 );
               })}
-              {orders.filter(o => o.status !== 'delivered').length === 0 && (
+              {orders.filter(o => o.status !== 'delivered' && o.status !== 'cancelled').length === 0 && (
                 <div className="py-24 text-center bg-white rounded-[3rem] border-2 border-dashed border-zinc-100 shadow-inner">
                   <Package className="h-16 w-16 text-zinc-100 mx-auto mb-6" />
                   <p className="text-zinc-400 font-black uppercase tracking-widest text-xs italic">No active transit tasks in registry</p>
@@ -690,40 +718,43 @@ export const RetailerDashboard = () => {
 
             <div className="grid grid-cols-1 gap-4">
               {orders
-                .filter(o => o.status === 'delivered')
+                .filter(o => o.status === 'delivered' || o.status === 'cancelled')
                 .filter(o => historyFilter === 'all' || o.payment_status === historyFilter)
                 .filter(o => supplierFilter === 'all' || o.supplierId === supplierFilter)
-                .map(order => (
-                  <Card key={`history-order-${order.id}`} className="hover:border-zinc-900 transition-all cursor-pointer group bg-white rounded-3xl border-none shadow-sm hover:shadow-xl" onClick={() => { setSelectedOrder(order); setIsDetailOpen(true); }}>
-                    <CardContent className="p-6 flex items-center justify-between">
-                      <div className="flex items-center gap-6">
-                        <div className="h-12 w-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:rotate-6 transition-transform">
-                          <CheckCircle className="h-6 w-6" />
+                .map(order => {
+                  const isCancelled = order.status === 'cancelled';
+                  return (
+                    <Card key={`history-order-${order.id}`} className="hover:border-zinc-900 transition-all cursor-pointer group bg-white rounded-3xl border-none shadow-sm hover:shadow-xl" onClick={() => { setSelectedOrder(order); setIsDetailOpen(true); }}>
+                      <CardContent className="p-6 flex items-center justify-between">
+                        <div className="flex items-center gap-6">
+                          <div className={`h-12 w-12 rounded-2xl flex items-center justify-center group-hover:rotate-6 transition-transform ${isCancelled ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                            {isCancelled ? <XCircle className="h-6 w-6" /> : <CheckCircle className="h-6 w-6" />}
+                          </div>
+                          <div>
+                            <p className="text-sm font-black text-zinc-900 group-hover:text-primary transition-colors uppercase italic">
+                              { (order as any).supplierName || organizations[order.supplierId || ""]?.name || fetchedOrgs[order.supplierId || ""] || `Order #${order.id.slice(-8).toUpperCase()}` }
+                            </p>
+                            <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">
+                              { (order as any).supplierName || organizations[order.supplierId || ""]?.name || fetchedOrgs[order.supplierId || ""] ? `Manifest #${order.id.slice(-8).toUpperCase()} • ` : "" }
+                              {isCancelled ? 'Cancelled' : (order.delivered_at ? safeFormat(order.delivered_at, 'PPP', 'Delivered') : 'Delivered')}
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-sm font-black text-zinc-900 group-hover:text-primary transition-colors uppercase italic">
-                            { (order as any).supplierName || organizations[order.supplierId || ""]?.name || fetchedOrgs[order.supplierId || ""] || `Order #${order.id.slice(-8).toUpperCase()}` }
-                          </p>
-                          <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">
-                            { (order as any).supplierName || organizations[order.supplierId || ""]?.name || fetchedOrgs[order.supplierId || ""] ? `Manifest #${order.id.slice(-8).toUpperCase()} • ` : "" }
-                            {order.delivered_at ? safeFormat(order.delivered_at, 'PPP', 'Delivered') : 'Delivered'}
-                          </p>
+                        <div className="flex items-center gap-12">
+                          <div className="text-right hidden sm:block">
+                            <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-1 italic">Settlement</p>
+                            {isCancelled ? <Badge className="bg-zinc-100 text-zinc-500 border-none hover:bg-zinc-100">Void</Badge> : getPaymentBadge(order.payment_status)}
+                          </div>
+                          <div className="text-right">
+                            <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-1 italic">Total Capital</p>
+                            <p className={`text-lg font-black italic tracking-tighter ${isCancelled ? 'line-through text-zinc-400' : ''}`}>{formatCurrency(order.totalAmount, order.currency)}</p>
+                          </div>
+                          <ChevronRight className="h-5 w-5 text-zinc-200 group-hover:translate-x-1 transition-all" />
                         </div>
-                      </div>
-                      <div className="flex items-center gap-12">
-                        <div className="text-right hidden sm:block">
-                          <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-1 italic">Settlement</p>
-                          {getPaymentBadge(order.payment_status)}
-                        </div>
-                        <div className="text-right">
-                          <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-1 italic">Total Capital</p>
-                          <p className="text-lg font-black italic tracking-tighter">{formatCurrency(order.totalAmount, order.currency)}</p>
-                        </div>
-                        <ChevronRight className="h-5 w-5 text-zinc-200 group-hover:translate-x-1 transition-all" />
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
             </div>
           </div>
         )}
@@ -871,6 +902,7 @@ export const RetailerDashboard = () => {
             onGenerateInvoice={generateInvoice}
             fetchedOrgs={fetchedOrgs}
             organizations={organizations}
+            onCancelOrder={handleCancelOrder}
           />
         )}
 

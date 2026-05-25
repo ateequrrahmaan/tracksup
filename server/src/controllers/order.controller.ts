@@ -36,10 +36,10 @@ export const deliverOrder = async (req: AuthRequest, res: Response) => {
 
 export const updateStatus = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.orgId) return sendError(res, "Org ID missing", 400);
+    const orgIdOrUserId = req.orgId || req.user.uid;
     const { id } = req.params;
     const { status } = req.body;
-    const result = await orderService.updateOrderStatus(id, req.orgId, status, req.user.uid);
+    const result = await orderService.updateOrderStatus(id, orgIdOrUserId, status, req.user.uid);
     sendSuccess(res, result);
   } catch (error: any) {
     sendError(res, error.message);
