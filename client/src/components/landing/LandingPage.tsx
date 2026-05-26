@@ -177,7 +177,7 @@ export const LandingPage = () => {
   // Video Teaser and Custom Interactive Player States
   const [videoSrc, setVideoSrc] = useState<string>("/video.mp4");
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
+  const [isMuted, setIsMuted] = useState(true);
   const [videoDuration, setVideoDuration] = useState(0);
   const [currentVideoTime, setCurrentVideoTime] = useState(0);
   const [videoError, setVideoError] = useState(false);
@@ -697,15 +697,25 @@ export const LandingPage = () => {
                 src={videoSrc}
                 onTimeUpdate={handleTimeUpdate}
                 onLoadedMetadata={handleLoadedMetadata}
+                onPlay={() => setIsPlaying(true)}
+                onPause={() => setIsPlaying(false)}
                 onError={() => {
                   console.log("Video failed to load: ", videoSrc);
+                  let normalizedSrc = videoSrc;
+                  try {
+                    if (videoSrc.startsWith("http")) {
+                      normalizedSrc = new URL(videoSrc).pathname;
+                    }
+                  } catch (e) {
+                    console.error("Error normalizing video source URL", e);
+                  }
                   const fallbacks = [
                     "/video.mp4",
                     "/vedio.mp4",
                     "/vedeo.mp4",
                     "https://assets.mixkit.co/videos/preview/mixkit-logistic-worker-scanning-codes-on-boxes-42437-large.mp4"
                   ];
-                  const currentIndex = fallbacks.indexOf(videoSrc);
+                  const currentIndex = fallbacks.indexOf(normalizedSrc);
                   if (currentIndex >= 0 && currentIndex < fallbacks.length - 1) {
                     const nextSrc = fallbacks[currentIndex + 1];
                     console.log("Stepping to fallback source: ", nextSrc);
@@ -718,6 +728,8 @@ export const LandingPage = () => {
                 onClick={togglePlay}
                 className="w-full h-full object-cover relative z-10 block"
                 playsInline
+                autoPlay
+                muted
                 loop
               />
 

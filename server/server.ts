@@ -37,7 +37,9 @@ async function startServer() {
 
   // Middleware
   app.use(helmet({
-    contentSecurityPolicy: process.env.NODE_ENV === "production",
+    contentSecurityPolicy: false,
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+    crossOriginEmbedderPolicy: false,
   }));
   app.use(cors({
     origin: process.env.CORS_ORIGIN || "*",
