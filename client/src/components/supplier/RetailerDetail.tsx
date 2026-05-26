@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { doc, getDoc, collection, query, where, getDocs, orderBy } from "firebase/firestore";
+import { doc, getDoc, collection, query, where, getDocs, orderBy, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/lib/auth-context";
 import { formatCurrency } from "@/constants";
@@ -12,11 +12,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, Store, Mail, Calendar, Package, TrendingUp, Clock, FileText, Download } from "lucide-react";
 import { Order, SystemUser } from "@/types";
 import api from "@/services/api";
+import { toast } from "sonner";
 
 export const RetailerDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { activeOrg, preferredCurrency } = useAuth();
+  const { activeOrg, activeRole, preferredCurrency } = useAuth();
   const [retailer, setRetailer] = useState<SystemUser | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -26,6 +27,27 @@ export const RetailerDetail = () => {
     pendingOrders: 0,
     lastOrderDate: "No orders yet"
   });
+
+  const handleRemoveRetailer = async () => {
+    if (!id || !activeOrg || !retailer) return;
+    const confirmRemove = window.confirm(
+      `Are you sure you want to remove ${retailer.name} as a retailer partner from your organization? They will be unable to access the organization, but all their history and data will be preserved, and they can join back later via invite.`
+    );
+    if (!confirmRemove) return;
+
+    try {
+      const membershipRef = doc(db, "memberships", `${id}_${activeOrg.id}`);
+      await updateDoc(membershipRef, {
+        status: "inactive",
+        updatedAt: new Date()
+      });
+      toast.success("Retail partner removed from organization successfully");
+      navigate("/");
+    } catch (error) {
+      console.error("Error removing retailer:", error);
+      toast.error("Failed to remove retail partner from organization");
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -135,6 +157,18 @@ export const RetailerDetail = () => {
                 <Badge variant="secondary">Shop</Badge>
                 <Badge variant="success">Active</Badge>
               </div>
+
+              {activeRole === "supplier" && (
+                <div className="pt-4 border-t border-zinc-100">
+                  <Button 
+                    variant="destructive" 
+                    className="w-full rounded-2xl font-bold uppercase italic tracking-widest text-[11px] h-11"
+                    onClick={handleRemoveRetailer}
+                  >
+                    Remove Partner
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
 

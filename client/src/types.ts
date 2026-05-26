@@ -24,7 +24,7 @@ export interface Membership {
   userId: string;
   organizationId: string;
   role: UserRole;
-  status: "active" | "suspended";
+  status: "active" | "suspended" | "inactive";
 }
 
 export interface Invite {

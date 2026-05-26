@@ -9,10 +9,11 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import { toast } from "sonner";
 import { Package2, LogIn, UserPlus, Eye, EyeOff, ShieldCheck, AlertCircle, Loader2, ArrowLeft } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 
 export const AuthForms = () => {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -66,6 +67,7 @@ export const AuthForms = () => {
         console.error("Error fetching user name for toast:", firestoreError);
         toast.success("Welcome back!");
       }
+      navigate("/");
     } catch (error: any) {
       console.error("Login Error:", error);
       if (error.code === "auth/invalid-credential" || error.code === "auth/user-not-found" || error.code === "auth/wrong-password") {
@@ -111,6 +113,7 @@ export const AuthForms = () => {
       });
       
       toast.success(`Account created successfully! Welcome, ${name}!`);
+      navigate("/");
     } catch (error: any) {
       console.error("Signup Error:", error);
       if (error.code === "auth/email-already-in-use") {

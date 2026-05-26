@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { doc, getDoc, collection, query, where, getDocs, orderBy } from "firebase/firestore";
+import { doc, getDoc, collection, query, where, getDocs, orderBy, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/lib/auth-context";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -12,11 +12,12 @@ import { ArrowLeft, User, Mail, Shield, CheckCircle, Clock, Package, BarChart3, 
 import { Order, SystemUser } from "@/types";
 import { formatCurrency } from "@/constants";
 import api from "@/services/api";
+import { toast } from "sonner";
 
 export const EmployeeDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { activeOrg, preferredCurrency } = useAuth();
+  const { activeOrg, activeRole, preferredCurrency } = useAuth();
   const [employee, setEmployee] = useState<SystemUser | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -26,6 +27,27 @@ export const EmployeeDetail = () => {
     pending: 0,
     successRate: 0
   });
+
+  const handleRemoveEmployee = async () => {
+    if (!id || !activeOrg || !employee) return;
+    const confirmRemove = window.confirm(
+      `Are you sure you want to remove ${employee.name} from the organization? They will be unable to access the organization, but all their history and data will be preserved, and they can join back later via invite.`
+    );
+    if (!confirmRemove) return;
+
+    try {
+      const membershipRef = doc(db, "memberships", `${id}_${activeOrg.id}`);
+      await updateDoc(membershipRef, {
+        status: "inactive",
+        updatedAt: new Date()
+      });
+      toast.success("Employee removed from organization successfully");
+      navigate("/");
+    } catch (error) {
+      console.error("Error removing employee:", error);
+      toast.error("Failed to remove employee from organization");
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -133,6 +155,18 @@ export const EmployeeDetail = () => {
                 <Badge variant="success">Active</Badge>
                 <Badge variant="outline">Verified</Badge>
               </div>
+
+              {activeRole === "supplier" && (
+                <div className="pt-4 border-t border-zinc-100">
+                  <Button 
+                    variant="destructive" 
+                    className="w-full rounded-2xl font-bold uppercase italic tracking-widest text-[11px] h-11"
+                    onClick={handleRemoveEmployee}
+                  >
+                    Remove Employee
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
 

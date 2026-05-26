@@ -116,7 +116,11 @@ export const SupplierDashboard = () => {
        handleFirestoreError(error, OperationType.GET, "orders");
     });
 
-    const memsQuery = query(collection(db, "memberships"), where("organizationId", "==", activeOrg.id));
+    const memsQuery = query(
+      collection(db, "memberships"), 
+      where("organizationId", "==", activeOrg.id),
+      where("status", "==", "active")
+    );
     const unsubscribeMems = onSnapshot(memsQuery, async (snapshot) => {
       const userIds = Array.from(new Set(snapshot.docs.map(d => d.data().userId)));
       
@@ -147,7 +151,7 @@ export const SupplierDashboard = () => {
       snapshot.docs.forEach(memDoc => {
         const mem = memDoc.data();
         const userData = usersMap.get(mem.userId);
-        if (userData) {
+        if (userData && mem.status === "active") {
           if (mem.role === "employee" && !emps.find(e => e.uid === userData.uid)) emps.push(userData);
           if (mem.role === "retailer" && !rets.find(r => r.uid === userData.uid)) rets.push(userData);
         }
@@ -503,6 +507,7 @@ export const SupplierDashboard = () => {
             employees={employees} 
             retailers={retailers} 
             stats={stats} 
+            mode={location.pathname === "/supplier/employees" ? "employees" : "retailers"}
         />
       )}
       {activeTab === "products" && (
