@@ -21,6 +21,7 @@ import { DeliveryConfirmationModal } from "./DeliveryConfirmationModal";
 import { DashboardLayout } from "../shared/DashboardLayout";
 import api from "@/services/api";
 import { SettingsView } from "../shared/SettingsView";
+import { EmployeeTasks } from "./EmployeeTasks";
 
 import { Order } from "@/types";
 import { format } from "date-fns";
@@ -189,6 +190,7 @@ export const EmployeeDashboard = () => {
     if (location.pathname === "/employee") return "overview";
     if (location.pathname === "/employee/history") return "history";
     if (location.pathname === "/employee/orders") return "deliveries";
+    if (location.pathname === "/employee/tasks") return "tasks";
     if (location.pathname === "/settings") return "settings";
     return "overview";
   }, [location.pathname]);
@@ -503,6 +505,8 @@ export const EmployeeDashboard = () => {
         )}
 
         {activeTab === "settings" && <SettingsView />}
+
+        {activeTab === "tasks" && <EmployeeTasks />}
 
         <DeliveryConfirmationModal
           order={selectedOrder}

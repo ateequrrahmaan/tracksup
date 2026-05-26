@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Search, Plus, Package, Edit2, Trash2, Image as ImageIcon, Loader2, ShoppingBag, ClipboardList, AlertCircle } from "lucide-react";
+import { Search, Plus, Package, Edit2, Trash2, Image as ImageIcon, Loader2, ShoppingBag, ClipboardList, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
@@ -49,6 +49,7 @@ export const SupplierProducts: React.FC<SupplierProductsProps> = ({
   const [imageUrl, setImageUrl] = useState("");
   const [initialStock, setInitialStock] = useState("");
   const [initialCost, setInitialCost] = useState("");
+  const [status, setStatus] = useState<"active" | "hidden">("active");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -112,6 +113,7 @@ export const SupplierProducts: React.FC<SupplierProductsProps> = ({
         currency,
         unitCost: initialCost ? parseFloat(initialCost) : 0,
         imageUrl: imageUrl || `https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?q=80&w=400&auto=format&fit=crop`,
+        status,
         ...(editingProduct ? {} : {
           stock: initialStock ? parseInt(initialStock) : 0,
           restockHistory: initialStock ? [{
@@ -151,6 +153,7 @@ export const SupplierProducts: React.FC<SupplierProductsProps> = ({
     setCurrency(product.currency);
     setImageUrl(product.imageUrl || "");
     setInitialCost(product.unitCost?.toString() || "");
+    setStatus(product.status || "active");
     setIsDialogOpen(true);
   };
 
@@ -178,6 +181,7 @@ export const SupplierProducts: React.FC<SupplierProductsProps> = ({
     setImageUrl("");
     setInitialStock("");
     setInitialCost("");
+    setStatus("active");
   };
 
   const filteredProducts = products.filter(p => 
@@ -272,6 +276,17 @@ export const SupplierProducts: React.FC<SupplierProductsProps> = ({
                       className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                       referrerPolicy="no-referrer"
                     />
+                    <div className="absolute top-4 left-4">
+                      {product.status === "hidden" ? (
+                        <Badge className="bg-rose-500 text-white font-black uppercase text-[8px] tracking-[0.1em] px-3 py-1.5 rounded-lg border-none shadow-sm flex items-center gap-1">
+                          <EyeOff className="h-3 w-3" /> Hidden
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-emerald-500 text-white font-black uppercase text-[8px] tracking-[0.1em] px-3 py-1.5 rounded-lg border-none shadow-sm flex items-center gap-1">
+                          <Eye className="h-3 w-3" /> Active
+                        </Badge>
+                      )}
+                    </div>
                     <div className="absolute top-4 right-4 flex gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                       <Button 
                         size="sm" 
@@ -573,6 +588,19 @@ export const SupplierProducts: React.FC<SupplierProductsProps> = ({
                   </div>
                 </div>
               )}
+
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-1">Product Status (Visibility)</Label>
+                <Select value={status} onValueChange={(val: "active" | "hidden") => setStatus(val)}>
+                  <SelectTrigger className="h-14 rounded-2xl bg-zinc-50 border-none font-bold uppercase text-[10px] tracking-widest text-zinc-900">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-2xl border-none shadow-2xl p-2">
+                    <SelectItem value="active" className="font-black uppercase text-[9px] tracking-widest py-3">Active (Visible to Retailers)</SelectItem>
+                    <SelectItem value="hidden" className="font-black uppercase text-[9px] tracking-widest py-3">Hidden (Not Visible inside Marketplace)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
               <div className="space-y-4">
                 <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 ml-1">Visual Asset</Label>

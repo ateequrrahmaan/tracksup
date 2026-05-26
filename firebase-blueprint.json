@@ -118,6 +118,22 @@
         "expiresAt": { "type": "string", "format": "date-time", "description": "Expiration timestamp." }
       },
       "required": ["email", "role", "status", "organizationId"]
+    },
+    "Task": {
+      "title": "Task",
+      "description": "An administrative or prep task created by a supplier and assigned to an employee.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "description": "Title of the task." },
+        "description": { "type": "string", "description": "Details of the task." },
+        "supplierId": { "type": "string", "description": "ID of the supplier organization." },
+        "employeeId": { "type": "string", "description": "UID of the employee assigned to the task." },
+        "employeeName": { "type": "string", "description": "Name of the assigned employee." },
+        "status": { "type": "string", "enum": ["pending", "completed"], "description": "Task status." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last update timestamp." }
+      },
+      "required": ["title", "description", "supplierId", "employeeId", "status"]
     }
   },
   "firestore": {
@@ -144,6 +160,10 @@
     "/invites/{inviteId}": {
       "schema": "Invite",
       "description": "Invitations to join organizations."
+    },
+    "/tasks/{taskId}": {
+      "schema": "Task",
+      "description": "Internal non-delivery operational chores."
     }
   }
 }

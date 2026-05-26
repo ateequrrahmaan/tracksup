@@ -20,7 +20,8 @@ import {
   Zap,
   Menu,
   X,
-  CheckCircle
+  CheckCircle,
+  ClipboardList
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { auth } from "@/lib/firebase";
@@ -62,6 +63,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       { id: "retailers", label: "Retailers", icon: Store, path: "/supplier/retailers" },
       { id: "employees", label: "Employees", icon: Users, path: "/supplier/employees" },
       { id: "products", label: "Products", icon: Box, path: "/supplier/products" },
+      { id: "tasks", label: "Tasks", icon: ClipboardList, path: "/supplier/tasks" },
       { id: "inventory", label: "Inventory", icon: Package, path: "/supplier/inventory" },
       { id: "performance", label: "Performance", icon: TrendingUp, path: "/supplier/performance" },
       { id: "strategy", label: "Strategy", icon: Zap, path: "/supplier/strategy" },
@@ -73,6 +75,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       { id: "history", label: "History", icon: History, path: "/retailer/history" },
     ] : []),
     ...(activeRole === 'employee' ? [
+       { id: "tasks", label: "Tasks", icon: ClipboardList, path: "/employee/tasks" },
        { id: "history", label: "Deliveries", icon: History, path: "/employee/history" }
     ] : [])
   ];

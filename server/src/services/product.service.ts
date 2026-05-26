@@ -91,12 +91,14 @@ export const listMarketplaceProducts = async (retailerId: string) => {
   const supplierNames = new Map();
   supplierSnapshot.docs.forEach(doc => supplierNames.set(doc.id, doc.data().name));
 
-  return snapshot.docs.map(doc => {
-    const data = doc.data();
-    return {
-      id: doc.id,
-      ...data,
-      supplierName: supplierNames.get(data.supplierId) || "Unknown Supplier"
-    };
-  });
+  return snapshot.docs
+    .filter(doc => doc.data().status !== "hidden")
+    .map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        supplierName: supplierNames.get(data.supplierId) || "Unknown Supplier"
+      };
+    });
 };

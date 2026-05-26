@@ -75,6 +75,7 @@ export interface Product {
   imageUrl?: string;
   stock?: number;
   unitCost?: number;
+  status?: "active" | "hidden";
   restockHistory?: Array<{
     quantityAdded: number;
     unitCost: number;
@@ -83,4 +84,16 @@ export interface Product {
     notes?: string;
   }>;
   createdAt: Timestamp;
+}
+
+export interface Task {
+  id: string;
+  title: string;
+  description: string;
+  supplierId: string;
+  employeeId: string;
+  employeeName: string;
+  status: "pending" | "completed";
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
 }

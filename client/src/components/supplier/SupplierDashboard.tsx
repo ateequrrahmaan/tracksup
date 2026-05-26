@@ -22,6 +22,7 @@ import { SupplierInvites } from "./components/SupplierInvites";
 import { SupplierProducts } from "./components/SupplierProducts";
 import { SupplierInventory } from "./components/SupplierInventory";
 import { StrategicTools } from "./components/StrategicTools";
+import { SupplierTasks } from "./components/SupplierTasks";
 import { SettingsView } from "../shared/SettingsView";
 
 import { useLocation } from "react-router-dom";
@@ -40,6 +41,7 @@ export const SupplierDashboard = () => {
     if (location.pathname === "/supplier/products") return "products";
     if (location.pathname === "/supplier/inventory") return "inventory";
     if (location.pathname === "/supplier/invites") return "invites";
+    if (location.pathname === "/supplier/tasks") return "tasks";
     if (location.pathname === "/settings") return "settings";
     return "overview";
   }, [location.pathname]);
@@ -525,6 +527,7 @@ export const SupplierDashboard = () => {
             onDeleteInvite={deleteInvite}
         />
       )}
+      {activeTab === "tasks" && <SupplierTasks employees={employees} />}
       {activeTab === "settings" && <SettingsView />}
 
       {/* Dialogs */}
