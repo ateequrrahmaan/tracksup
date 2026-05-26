@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { 
@@ -27,9 +27,31 @@ import {
   Palette,
   Terminal,
   Menu,
-  X
+  X,
+  TrendingUp,
+  Layers,
+  ShieldAlert,
+  Target,
+  ArrowUpRight,
+  Brain,
+  Calculator,
+  Sparkles,
+  Play,
+  Pause,
+  Volume2,
+  VolumeX,
+  Maximize2,
+  UploadCloud,
+  Tv
 } from "lucide-react";
 import { motion } from "motion/react";
+
+const formatTime = (time: number) => {
+  if (isNaN(time)) return "00:00";
+  const mins = Math.floor(time / 60);
+  const secs = Math.floor(time % 60);
+  return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+};
 
 const FlowStep = ({ icon: Icon, title, desc, step, theme }: { icon: any, title: string, desc: string, step: string, theme: string }) => (
   <motion.div 
@@ -147,6 +169,138 @@ const PricingCard = ({ plan, price, description, features, theme, highlighted = 
 export const LandingPage = () => {
   const [theme, setTheme] = useState<'light' | 'dark' | 'cyber' | 'midnight'>('light');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [demoTarget, setDemoTarget] = useState<string>("500000");
+  const [isAuditing, setIsAuditing] = useState(false);
+  const [auditLog, setAuditLog] = useState<string[]>([]);
+  const [auditResult, setAuditResult] = useState<string | null>(null);
+
+  // Video Teaser and Custom Interactive Player States
+  const [videoSrc, setVideoSrc] = useState<string>("/video.mp4");
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [videoDuration, setVideoDuration] = useState(0);
+  const [currentVideoTime, setCurrentVideoTime] = useState(0);
+  const [videoError, setVideoError] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  const togglePlay = () => {
+    if (!videoRef.current) return;
+    if (isPlaying) {
+      videoRef.current.pause();
+      setIsPlaying(false);
+    } else {
+      videoRef.current.play()
+        .then(() => setIsPlaying(true))
+        .catch(err => console.error("Video play error:", err));
+    }
+  };
+
+  const toggleMute = () => {
+    if (!videoRef.current) return;
+    videoRef.current.muted = !isMuted;
+    setIsMuted(!isMuted);
+  };
+
+  const handleTimeUpdate = () => {
+    if (!videoRef.current) return;
+    setCurrentVideoTime(videoRef.current.currentTime);
+  };
+
+  const handleLoadedMetadata = () => {
+    if (!videoRef.current) return;
+    setVideoDuration(videoRef.current.duration);
+    setVideoError(false);
+  };
+
+  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!videoRef.current) return;
+    const seekTime = parseFloat(e.target.value);
+    videoRef.current.currentTime = seekTime;
+    setCurrentVideoTime(seekTime);
+  };
+
+  const handleFullscreen = () => {
+    if (!videoRef.current) return;
+    if (videoRef.current.requestFullscreen) {
+      videoRef.current.requestFullscreen();
+    }
+  };
+
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const file = e.dataTransfer.files[0];
+      if (file.type.startsWith("video/")) {
+        const objectUrl = URL.createObjectURL(file);
+        setVideoSrc(objectUrl);
+        setVideoError(false);
+        setIsPlaying(false);
+      }
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      if (file.type.startsWith("video/")) {
+        const objectUrl = URL.createObjectURL(file);
+        setVideoSrc(objectUrl);
+        setVideoError(false);
+        setIsPlaying(false);
+      }
+    }
+  };
+
+  const demoCurrentRevenue = 320000;
+  const demoAvgOrderVal = 1850;
+  
+  const calculateDemoGap = () => {
+    const val = parseFloat(demoTarget);
+    if (isNaN(val)) return null;
+    return val - demoCurrentRevenue;
+  };
+  const demoGap = calculateDemoGap();
+
+  const runDemoAudit = () => {
+    if (isAuditing) return;
+    setIsAuditing(true);
+    setAuditLog([]);
+    setAuditResult(null);
+
+    const logs = [
+      "Initializing predictive intelligence model...",
+      "Scanning active retail nodes and edge clusters...",
+      "Analyzing geographical delivery latency heatmaps...",
+      "Evaluating risk thresholds based on payment settlement status...",
+      "Synthesizing optimal efficiency strategies..."
+    ];
+
+    let i = 0;
+    const interval = setInterval(() => {
+      if (i < logs.length) {
+        setAuditLog(prev => [...prev, logs[i]]);
+        i++;
+      } else {
+        clearInterval(interval);
+        setAuditResult("CRITICAL INSIGHT DIRECTIVE: Your primary distribution network has a 14.2% latent order fulfillment gap. Optimizing delivery coordinates can recapture up to 22.4% in fuel overhead while lowering average delivery latency by 3.2 hours.");
+        setIsAuditing(false);
+      }
+    }, 450);
+  };
 
   useEffect(() => {
     if (isMenuOpen) {
@@ -243,7 +397,7 @@ export const LandingPage = () => {
         </div>
 
         <div className="hidden lg:flex items-center gap-6">
-          {["Network", "Protocols", "Pricing", "Testimonials"].map((item) => (
+          {["Network", "Demo", "Protocols", "Intelligence", "Pricing", "Testimonials"].map((item) => (
             <a key={item} href={`#${item.toLowerCase()}`} className={`text-[10px] font-black uppercase tracking-[0.2em] transition-colors hover:text-emerald-500 ${currentTheme.subText}`}>
               {item}
             </a>
@@ -290,7 +444,7 @@ export const LandingPage = () => {
         className={`fixed inset-0 lg:hidden z-[90] flex flex-col p-6 pt-32 pb-10 overflow-y-auto transition-colors duration-700 ${currentTheme.bg}`}
       >
         <div className="space-y-8 flex flex-col items-center text-center">
-          {["Network", "Protocols", "Pricing", "Testimonials"].map((item) => (
+          {["Network", "Demo", "Protocols", "Intelligence", "Pricing", "Testimonials"].map((item) => (
             <a 
               key={item} 
               href={`#${item.toLowerCase()}`} 
@@ -506,6 +660,202 @@ export const LandingPage = () => {
           </div>
         </section>
 
+        {/* Interactive System Walkthrough Teaser/Video Section */}
+        <section id="demo" className={`py-20 md:py-32 px-6 md:px-16 lg:px-24 border-t relative overflow-hidden transition-colors duration-700 ${currentTheme.muted}`}>
+          {/* Decorative gradients */}
+          <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full blur-[120px] pointer-events-none -z-10 transition-colors duration-1000 ${theme === 'cyber' ? 'bg-emerald-500/5' : theme === 'midnight' ? 'bg-blue-500/5' : 'bg-zinc-200/20'}`} />
+
+          <div className="max-w-7xl mx-auto">
+            <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-8 mb-16">
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <Tv className={`h-5 w-5 ${theme === 'midnight' ? 'text-blue-500' : 'text-emerald-500'}`} />
+                  <h2 className={`text-[10px] font-black uppercase tracking-[0.5em] italic ${theme === 'midnight' ? 'text-blue-500' : 'text-emerald-500'}`}>Interactive Showcase</h2>
+                </div>
+                <h3 className={`text-4xl md:text-6xl font-black uppercase italic tracking-tighter leading-none ${currentTheme.text}`}>System Walkthrough</h3>
+              </div>
+              <p className={`font-medium max-w-md text-base md:text-lg transition-colors ${currentTheme.subText}`}>
+                Experience the live tracking console, proof-of-delivery flows, and real-time ledger settlement of the TracksUp operating system.
+              </p>
+            </div>
+
+            {/* Custom Interactive Video Player Frame */}
+            <div 
+              onDragEnter={handleDrag}
+              onDragOver={handleDrag}
+              onDragLeave={handleDrag}
+              onDrop={handleDrop}
+              className={`relative aspect-video w-full rounded-[2.5rem] md:rounded-[3.5rem] overflow-hidden border transition-all duration-700 group/player shadow-2xl ${
+                dragActive 
+                  ? (theme === 'cyber' ? 'border-emerald-400 bg-emerald-950/25 scale-[0.995]' : 'border-zinc-900 bg-zinc-100 scale-[0.995]') 
+                  : (theme === 'cyber' ? 'border-emerald-500/20 bg-black' : theme === 'midnight' ? 'border-blue-900/30 bg-slate-950' : 'border-zinc-200 bg-zinc-50')
+              }`}
+            >
+              {/* Actual Video Element */}
+              <video
+                ref={videoRef}
+                src={videoSrc}
+                onTimeUpdate={handleTimeUpdate}
+                onLoadedMetadata={handleLoadedMetadata}
+                onError={() => {
+                  console.log("Video failed to load: ", videoSrc);
+                  const fallbacks = [
+                    "/video.mp4",
+                    "/vedio.mp4",
+                    "/vedeo.mp4",
+                    "https://assets.mixkit.co/videos/preview/mixkit-logistic-worker-scanning-codes-on-boxes-42437-large.mp4"
+                  ];
+                  const currentIndex = fallbacks.indexOf(videoSrc);
+                  if (currentIndex >= 0 && currentIndex < fallbacks.length - 1) {
+                    const nextSrc = fallbacks[currentIndex + 1];
+                    console.log("Stepping to fallback source: ", nextSrc);
+                    setVideoSrc(nextSrc);
+                  } else {
+                    console.error("All fallback video URLs failed.");
+                    setVideoError(true);
+                  }
+                }}
+                onClick={togglePlay}
+                className="w-full h-full object-cover relative z-10 block"
+                playsInline
+                loop
+              />
+
+              {/* Decorative Scanlines for Cyber Theme */}
+              {theme === 'cyber' && (
+                <div className="absolute inset-0 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] bg-[size:100%_4px,6px_100%] pointer-events-none z-20 opacity-30" />
+              )}
+
+              {/* Error/Fallback Custom Interactive Demo State */}
+              {videoError && (
+                <div className={`absolute inset-0 z-20 flex flex-col items-center justify-center p-8 text-center transition-colors ${theme === 'cyber' ? 'bg-black/90' : 'bg-zinc-950/95'}`}>
+                  {/* Elegant micro-UI representing the walk-through keyframes */}
+                  <div className="absolute inset-0 opacity-15 pointer-events-none flex items-center justify-center">
+                    <div className="grid grid-cols-3 gap-6 w-5/6">
+                      <div className="aspect-video bg-zinc-800 rounded-2xl border border-zinc-700 p-3 space-y-2">
+                        <div className="h-3 w-1/3 bg-zinc-600 rounded" />
+                        <div className="h-2 w-full bg-zinc-700 rounded" />
+                        <span className="text-[7px] text-zinc-500 font-mono">STATION_NODE: ACTIVE</span>
+                      </div>
+                      <div className="aspect-video bg-zinc-800 rounded-2xl border border-zinc-700 p-3 flex flex-col justify-between">
+                        <div className="h-5 w-5 bg-emerald-500/20 rounded-full flex items-center justify-center text-emerald-400 text-[8px] font-bold">✔</div>
+                        <span className="text-[7px] text-zinc-500 font-mono">DELIVERY_CONFIRMED</span>
+                      </div>
+                      <div className="aspect-video bg-zinc-800 rounded-2xl border border-zinc-700 p-3 space-y-2">
+                        <div className="h-1.5 w-1/2 bg-zinc-600 rounded" />
+                        <div className="h-1.5 w-[80%] bg-zinc-700 rounded" />
+                        <div className="h-1.5 w-[60%] bg-zinc-700 rounded" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="relative z-30 max-w-lg space-y-6">
+                    <div className="inline-flex h-16 w-16 items-center justify-center rounded-3xl bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 animate-pulse">
+                      <UploadCloud className="h-8 w-8" />
+                    </div>
+
+                    <div className="space-y-2">
+                      <h4 className="text-xl md:text-2xl font-black uppercase italic tracking-tight text-white leading-tight">Walkthrough Video Portal</h4>
+                      <p className="text-xs font-semibold text-zinc-400 leading-normal">
+                        To register, place your <code className="px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-emerald-400 font-mono text-[10px]">video.mp4</code> walkthrough inside the <code className="px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-emerald-400 font-mono text-[10px]">/client/public/</code> storage directory.
+                      </p>
+                    </div>
+
+                    <div className="pt-2">
+                      <label className={`inline-flex items-center gap-3 h-12 px-6 rounded-xl font-black uppercase tracking-widest text-[10px] italic transition-all hover:scale-105 active:scale-95 cursor-pointer ${theme === 'cyber' ? 'bg-emerald-500 text-black hover:bg-emerald-400' : 'bg-white text-zinc-900 hover:bg-zinc-100'}`}>
+                        Choose Video File
+                        <input
+                          type="file"
+                          accept="video/*"
+                          onChange={handleFileChange}
+                          className="hidden"
+                        />
+                      </label>
+                      <span className="block mt-3 text-[9px] font-bold text-zinc-500 uppercase tracking-widest">
+                        Or drag & drop your walkthrough MP4 file here to run preview
+                      </span>
+                    </div>
+
+                    <div className="flex gap-4 justify-center text-[8px] font-mono font-bold text-zinc-500 pt-4 border-t border-zinc-900">
+                      <span>▶ DRIVER APP FLOWS</span>
+                      <span>•</span>
+                      <span>▶ LEDGER DEPLOYMENT</span>
+                      <span>•</span>
+                      <span>▶ RETAIL OVERVIEW</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Hover custom media player HUD */}
+              {!videoError && (
+                <div className="absolute inset-x-0 bottom-0 z-30 p-6 bg-gradient-to-t from-black/80 via-black/40 to-transparent translate-y-2 opacity-0 group-hover/player:translate-y-0 group-hover/player:opacity-100 transition-all duration-300">
+                  <div className="space-y-4">
+                    {/* Time Progress slider */}
+                    <div className="flex items-center gap-4">
+                      <span className="text-[10px] font-mono text-zinc-300 font-bold leading-none">
+                        {formatTime(currentVideoTime)}
+                      </span>
+                      <input
+                        type="range"
+                        min="0"
+                        max={videoDuration || 100}
+                        step="0.1"
+                        value={currentVideoTime}
+                        onChange={handleSeek}
+                        className="flex-1 accent-emerald-500 h-1 bg-zinc-700 rounded-lg cursor-pointer appearance-none range-sm [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-emerald-500 hover:[&::-webkit-slider-thumb]:scale-110"
+                      />
+                      <span className="text-[10px] font-mono text-zinc-300 font-bold leading-none">
+                        {formatTime(videoDuration)}
+                      </span>
+                    </div>
+
+                    {/* HUD Controls */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <button 
+                          onClick={togglePlay}
+                          className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"
+                          aria-label={isPlaying ? "Pause" : "Play"}
+                        >
+                          {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 fill-white" />}
+                        </button>
+                        
+                        <button 
+                          onClick={toggleMute}
+                          className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"
+                          aria-label={isMuted ? "Unmute" : "Mute"}
+                        >
+                          {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+                        </button>
+
+                        <div className="text-[9px] font-black uppercase text-zinc-400 tracking-widest italic flex items-center gap-2">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+                          <span>Walkthrough Stream</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <label className="p-1.5 text-[8px] font-bold bg-white/10 hover:bg-white/20 text-zinc-300 rounded-md cursor-pointer transition-colors uppercase tracking-wider">
+                          Update Source
+                          <input type="file" accept="video/*" onChange={handleFileChange} className="hidden" />
+                        </label>
+                        <button 
+                          onClick={handleFullscreen}
+                          className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"
+                          aria-label="Fullscreen"
+                        >
+                          <Maximize2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+
         {/* Step by Step */}
         <section id="protocols" className={`py-32 px-6 md:px-16 lg:px-24 border-t overflow-hidden transition-colors duration-700 ${currentTheme.bg} ${theme === 'cyber' ? 'border-emerald-500/10' : 'border-zinc-100'}`}>
           <div className="max-w-7xl mx-auto">
@@ -643,6 +993,305 @@ export const LandingPage = () => {
                   theme={theme}
                 />
             </div>
+          </div>
+        </section>
+
+        {/* Advanced Strategic Intelligence Suite Section */}
+        <section id="intelligence" className={`py-20 md:py-32 px-6 md:px-16 lg:px-24 border-t relative overflow-hidden transition-colors duration-700 ${currentTheme.muted}`}>
+          {/* Subtle glowing elements matching the active theme */}
+          <div className={`absolute top-1/4 left-1/4 w-96 h-96 rounded-full blur-[120px] pointer-events-none -z-10 transition-colors duration-1000 ${theme === 'cyber' ? 'bg-emerald-500/5' : theme === 'midnight' ? 'bg-blue-500/5' : 'bg-zinc-100/30'}`} />
+          <div className={`absolute bottom-1/4 right-1/4 w-96 h-96 rounded-full blur-[120px] pointer-events-none -z-10 transition-colors duration-1000 ${theme === 'cyber' ? 'bg-emerald-500/5' : theme === 'midnight' ? 'bg-blue-500/5' : 'bg-zinc-100/30'}`} />
+          
+          <div className="max-w-7xl mx-auto">
+             <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-8 mb-20">
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Brain className={`h-5 w-5 ${theme === 'midnight' ? 'text-blue-500' : 'text-emerald-500'}`} />
+                    <h2 className={`text-[10px] font-black uppercase tracking-[0.5em] italic ${theme === 'midnight' ? 'text-blue-500' : 'text-emerald-500'}`}>Advanced Intelligence Suite</h2>
+                  </div>
+                  <h3 className={`text-4xl md:text-6xl font-black uppercase italic tracking-tighter leading-none ${currentTheme.text}`}>Strategic Decision Support</h3>
+                </div>
+                <p className={`font-medium max-w-md text-base md:text-lg transition-colors ${currentTheme.subText}`}>
+                  Analyze, forecast, and optimize every vector of your distributor or supplier business with our predictive analytics, profitability matrix, and risk controllers.
+                </p>
+             </div>
+
+             {/* Bento Grid */}
+             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                
+                {/* Bento Card 1: Revenue Goal Gap Vector (Interactive Calculator) */}
+                <motion.div 
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  className={`lg:col-span-7 rounded-[3.5rem] p-8 md:p-10 border relative overflow-hidden flex flex-col justify-between ${theme === 'cyber' ? 'bg-black border-emerald-500/20' : theme === 'midnight' ? 'bg-slate-900/40 border-blue-900/20' : 'bg-white border-zinc-100'}`}
+                >
+                  <div className="absolute top-0 right-0 p-8 opacity-[0.02] pointer-events-none">
+                     <Calculator className="h-44 w-44" />
+                  </div>
+                  <div className="relative z-10 font-bold whitespace-normal">
+                    <div className="flex items-center gap-3 mb-6">
+                      <div className={`h-10 w-10 flex-shrink-0 rounded-xl flex items-center justify-center ${theme === 'cyber' ? 'bg-emerald-500/10 text-emerald-400' : theme === 'midnight' ? 'bg-blue-600 text-white' : 'bg-zinc-900 text-white'}`}>
+                        <Target className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <h4 className={`text-lg font-black uppercase italic tracking-tight leading-none ${currentTheme.text}`}>Revenue Target Vector Simulator</h4>
+                        <span className={`text-[9px] font-black uppercase tracking-widest block mt-1 ${theme === 'cyber' ? 'text-emerald-600' : 'text-zinc-500'}`}>Forecast next-quarter scaling requirements</span>
+                      </div>
+                    </div>
+
+                    <p className={`text-xs font-semibold leading-relaxed mb-6 max-w-lg ${theme === 'cyber' ? 'text-emerald-600' : 'text-zinc-500'}`}>
+                      Input your target revenue goal below to dynamically compute the overall revenue shortfall/surplus and the additional order volume needed based on typical average transaction sizes.
+                    </p>
+
+                    <div className="space-y-4 max-w-md">
+                      <div className="grid grid-cols-2 gap-4">
+                         <div className="space-y-1.5">
+                            <span className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Current Sales Volume</span>
+                            <div className={`py-3 px-4 rounded-xl border font-bold text-sm ${theme === 'cyber' ? 'bg-emerald-950/20 border-emerald-500/10 text-emerald-400' : 'bg-zinc-50 border-zinc-100 text-zinc-800'}`}>
+                               $320,000.00
+                            </div>
+                         </div>
+                         <div className="space-y-1.5">
+                            <span className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Typical Order Value</span>
+                            <div className={`py-3 px-4 rounded-xl border font-bold text-sm ${theme === 'cyber' ? 'bg-emerald-950/20 border-emerald-500/10 text-emerald-400' : 'bg-zinc-50 border-zinc-100 text-zinc-800'}`}>
+                               $1,850.00
+                            </div>
+                         </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-[9px] font-black uppercase tracking-[0.1em] text-zinc-500">Desired Quarterly Goal Amount ($)</label>
+                        <div className="relative">
+                          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 text-sm font-bold">$</span>
+                          <input 
+                            type="number"
+                            value={demoTarget}
+                            onChange={(e) => setDemoTarget(e.target.value)}
+                            className={`w-full pl-8 pr-4 h-12 rounded-xl text-sm font-black border transition-all ${theme === 'cyber' ? 'bg-black border-emerald-500/20 text-emerald-400 focus:border-emerald-500 focus:outline-none' : theme === 'midnight' ? 'bg-slate-900 border-blue-900/30 text-white focus:border-blue-500 focus:outline-none' : 'bg-zinc-50 border-zinc-200 text-zinc-900 focus:border-zinc-900 focus:outline-none'}`}
+                            placeholder="Enter desired target amount"
+                          />
+                        </div>
+                      </div>
+
+                      {demoGap !== null && (
+                        <div className={`p-4 mt-2 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border transition-colors ${demoGap > 0 ? (theme === 'cyber' ? 'bg-emerald-950/30 border-emerald-500/20 text-emerald-400' : 'bg-zinc-900 border-zinc-800 text-white') : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600'}`}>
+                          <div>
+                            <div className="text-[8px] font-black uppercase tracking-widest opacity-80 mb-1">
+                               {demoGap > 0 ? 'Projected Revenue Shortfall' : 'Goal Surplus Achieved'}
+                            </div>
+                            <h4 className="text-xl font-black italic tracking-tighter">
+                               ${Math.abs(demoGap).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </h4>
+                          </div>
+                          {demoGap > 0 && (
+                            <div className="text-[10px] font-bold leading-tight max-w-[210px] border-t sm:border-t-0 sm:border-l border-white/10 pt-2 sm:pt-0 sm:pl-4">
+                               To cross this threshold, your business requires approximately <span className={theme === 'cyber' ? 'text-emerald-400 font-black' : 'text-emerald-400 font-extrabold'}>{Math.ceil(Math.abs(demoGap) / demoAvgOrderVal)}</span> additional high-yield orders.
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </motion.div>
+
+                {/* Bento Card 2: Interactive Strategic AI Threat & Market Intel (Interactive Console) */}
+                <motion.div 
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  className={`lg:col-span-5 rounded-[3.5rem] p-8 md:p-10 border flex flex-col justify-between ${theme === 'cyber' ? 'bg-black border-emerald-500/20' : theme === 'midnight' ? 'bg-slate-900/40 border-blue-900/20' : 'bg-white border-zinc-100'}`}
+                >
+                  <div className="relative z-10 flex flex-col h-full justify-between">
+                    <div>
+                      <div className="flex items-center gap-3 mb-6">
+                        <div className={`h-10 w-10 flex-shrink-0 rounded-xl flex items-center justify-center ${theme === 'cyber' ? 'bg-emerald-500/10 text-emerald-400' : theme === 'midnight' ? 'bg-blue-600 text-white' : 'bg-zinc-900 text-white'}`}>
+                          <Sparkles className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <h4 className={`text-lg font-black uppercase italic tracking-tight leading-none ${currentTheme.text}`}>Market Intel Simulator</h4>
+                          <span className={`text-[9px] font-black uppercase tracking-widest block mt-1 ${theme === 'cyber' ? 'text-emerald-600' : 'text-zinc-500'}`}>Autonomous operations diagnostics</span>
+                        </div>
+                      </div>
+
+                      <p className={`text-xs font-semibold leading-relaxed mb-6 ${theme === 'cyber' ? 'text-emerald-600' : 'text-zinc-500'}`}>
+                        Simulate the generation of our proprietary, AI-driven diagnostics audit designed to identify logistical inefficiencies.
+                      </p>
+
+                      {/* Display Log Trace */}
+                      <div className={`p-4 rounded-2xl min-h-[140px] font-mono text-[10px] space-y-1.5 leading-normal flex flex-col justify-end transition-colors ${theme === 'cyber' ? 'bg-emerald-950/10 border border-emerald-500/10 text-emerald-400' : 'bg-zinc-950 border-none text-zinc-300'}`}>
+                        {auditLog.length === 0 && !isAuditing && !auditResult && (
+                          <div className="text-zinc-500 italic uppercase tracking-wider text-center py-6">
+                            SYSTEM PORTAL READY FOR AUDIT...
+                          </div>
+                        )}
+                        {auditLog.map((log, index) => (
+                          <div key={index} className="flex gap-2 items-center">
+                            <span className="text-emerald-500">▶</span>
+                            <span>{log}</span>
+                          </div>
+                        ))}
+                        {isAuditing && (
+                          <motion.div 
+                            animate={{ opacity: [1, 0, 1] }} 
+                            transition={{ duration: 1, repeat: Infinity }} 
+                            className="text-amber-400 flex items-center gap-2"
+                          >
+                            <span>●</span> PROCESSING DATA PIPELINES...
+                          </motion.div>
+                        )}
+                        {auditResult && (
+                          <div className={`mt-3 p-3 rounded-xl border text-[11px] font-sans font-bold leading-relaxed ${theme === 'cyber' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300 animate-pulse' : 'bg-white/5 border-white/10 text-white'}`}>
+                            {auditResult}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="mt-6">
+                      <Button 
+                        onClick={runDemoAudit}
+                        disabled={isAuditing}
+                        className={`w-full h-12 rounded-xl font-black uppercase tracking-widest text-[10px] italic transition-all ${isAuditing ? 'opacity-50 cursor-not-allowed' : ''} ${theme === 'cyber' ? 'bg-emerald-500 text-black hover:bg-emerald-400' : theme === 'midnight' ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-zinc-900 hover:bg-zinc-800 text-white'}`}
+                      >
+                        {isAuditing ? "Processing Audit Vector..." : "Run Operations Audit"}
+                      </Button>
+                    </div>
+                  </div>
+                </motion.div>
+
+                {/* Bento Card 3: Product Profitability Matrix Mock Blueprint */}
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.98 }}
+                  whileInView={{ opacity: 1, scale: 1 }}
+                  viewport={{ once: true }}
+                  className={`lg:col-span-8 rounded-[3.5rem] p-8 md:p-10 border flex flex-col justify-between ${theme === 'cyber' ? 'bg-black border-emerald-500/20' : theme === 'midnight' ? 'bg-slate-900/40 border-blue-900/20' : 'bg-white border-zinc-100'}`}
+                >
+                  <div className="space-y-6">
+                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                           <div className={`h-10 w-10 flex-shrink-0 rounded-xl flex items-center justify-center ${theme === 'cyber' ? 'bg-emerald-500/10 text-emerald-400' : theme === 'midnight' ? 'bg-blue-600 text-white' : 'bg-zinc-900 text-white'}`}>
+                              <Layers className="h-5 w-5" />
+                           </div>
+                           <div>
+                              <h4 className={`text-lg font-black uppercase italic tracking-tight leading-none ${currentTheme.text}`}>Product Profitability Matrix</h4>
+                              <span className={`text-[9px] font-black uppercase tracking-widest block mt-1 ${theme === 'cyber' ? 'text-emerald-600' : 'text-zinc-500'}`}>Continuous cost & markup visualization</span>
+                           </div>
+                        </div>
+
+                        <div className="flex gap-2">
+                           <div className={`py-1.5 px-3 rounded-lg border text-[9px] font-bold ${theme === 'cyber' ? 'bg-emerald-950/20 border-emerald-500/10 text-emerald-400' : 'bg-zinc-50 border-zinc-100 text-zinc-700'}`}>
+                              Avg Margin: <span className="font-black italic">54%</span>
+                           </div>
+                        </div>
+                     </div>
+
+                     <p className={`text-xs font-semibold leading-relaxed max-w-2xl ${theme === 'cyber' ? 'text-emerald-600' : 'text-zinc-500'}`}>
+                        Our direct product performance layout matches manufacturing costs against cumulative unit revenues to show exact pricing yield margins per SKU.
+                     </p>
+
+                     {/* Profitability Matrix Demo List */}
+                     <div className="space-y-3 pt-2">
+                        {[
+                          { name: "Superalloy Bulk Plates", qty: 240, cost: 42000, rev: 89000, margin: 53 },
+                          { name: "Synthetic Carbon Mesh", qty: 180, cost: 18000, rev: 44000, margin: 59 },
+                          { name: "Polymer Sealant Cores", qty: 350, cost: 12000, rev: 25000, margin: 52 }
+                        ].map((prod, i) => (
+                          <div key={i} className={`p-4 rounded-2xl border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 transition-all ${theme === 'cyber' ? 'bg-emerald-950/10 border-emerald-500/10 text-emerald-400' : 'bg-zinc-50 border-zinc-100 text-zinc-800'}`}>
+                            <div className="flex items-center gap-3">
+                               <div className={`h-8 w-8 rounded-lg flex items-center justify-center font-black text-sm italic ${theme === 'cyber' ? 'bg-emerald-500/15 text-emerald-300' : theme === 'midnight' ? 'bg-blue-900/10 text-blue-400' : 'bg-zinc-900 text-white'}`}>
+                                 {prod.name[0]}
+                               </div>
+                               <div>
+                                  <h5 className={`text-xs font-black uppercase tracking-tight ${theme === 'cyber' ? 'text-emerald-400 animate-pulse' : 'text-zinc-900'}`}>{prod.name}</h5>
+                                  <div className="flex gap-2 text-[8px] font-bold uppercase tracking-widest text-zinc-400 mt-0.5 animate-none">
+                                     <span>Qty Sold: {prod.qty}</span>
+                                     <span>•</span>
+                                     <span>Gross Sales: ${prod.rev.toLocaleString()}</span>
+                                  </div>
+                               </div>
+                            </div>
+
+                            <div className="flex items-center gap-6 justify-between w-full sm:w-auto border-t sm:border-none pt-2 sm:pt-0">
+                               <div className="text-left sm:text-right animate-none">
+                                  <div className="text-[8px] font-black uppercase tracking-widest text-zinc-400">Total Mfg Cost</div>
+                                  <div className="text-xs font-bold font-mono">${prod.cost.toLocaleString()}</div>
+                               </div>
+                               <div className="text-right">
+                                  <div className="text-[8px] font-black uppercase tracking-widest text-zinc-400">Net Profit Margin</div>
+                                  <span className={`inline-block px-2 py-0.5 mt-1 rounded-md text-[9px] font-black uppercase tracking-widest ${theme === 'cyber' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-800'}`}>
+                                     {prod.margin}% Margin
+                                  </span>
+                                </div>
+                            </div>
+                          </div>
+                        ))}
+                     </div>
+                  </div>
+                </motion.div>
+
+                {/* Bento Card 4: Operations Latency & Risk Controller Gauge */}
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.98 }}
+                  whileInView={{ opacity: 1, scale: 1 }}
+                  viewport={{ once: true }}
+                  className={`lg:col-span-4 rounded-[3.5rem] p-8 md:p-10 border flex flex-col justify-between ${theme === 'cyber' ? 'bg-black border-emerald-500/20' : theme === 'midnight' ? 'bg-slate-900/40 border-blue-900/20' : 'bg-white border-zinc-100'}`}
+                >
+                  <div className="space-y-6 flex flex-col h-full justify-between">
+                     <div>
+                        <div className="flex items-center gap-3 mb-6">
+                           <div className={`h-10 w-10 flex-shrink-0 rounded-xl flex items-center justify-center ${theme === 'cyber' ? 'bg-emerald-500/10 text-emerald-400' : theme === 'midnight' ? 'bg-blue-600 text-white' : 'bg-zinc-900 text-white'}`}>
+                              <ShieldAlert className="h-5 w-5" />
+                           </div>
+                           <div>
+                              <h4 className={`text-lg font-black uppercase italic tracking-tight leading-none ${currentTheme.text}`}>Risk Controller</h4>
+                              <span className={`text-[9px] font-black uppercase tracking-widest block mt-1 ${theme === 'cyber' ? 'text-emerald-600' : 'text-zinc-500'}`}>Friction & settlement analytics</span>
+                           </div>
+                        </div>
+
+                        <p className={`text-xs font-semibold leading-relaxed mb-6 ${theme === 'cyber' ? 'text-emerald-600' : 'text-zinc-500'}`}>
+                           Monitor outstanding accounts and credit thresholds with responsive risk projection vectors to defend revenue cycles against latency.
+                        </p>
+
+                        <div className="p-4 rounded-xl border border-dashed border-zinc-200 bg-transparent space-y-4">
+                           <div className="space-y-1">
+                              <div className="flex justify-between items-center text-[8px] font-black uppercase tracking-widest text-zinc-500">
+                                 <span>Outstanding Risk Level</span>
+                                 <span className="text-emerald-500 font-bold">Normal</span>
+                              </div>
+                              <div className="h-2.5 w-full bg-zinc-100 rounded-full overflow-hidden flex">
+                                 <div className="h-full bg-emerald-500 w-[78%]" />
+                                 <div className="h-full bg-amber-500 w-[14%]" />
+                                 <div className="h-full bg-rose-500 w-[8%]" />
+                              </div>
+                           </div>
+
+                           <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-1">
+                                 <span className="text-[8px] font-black uppercase tracking-widest text-zinc-400 block">Avg Delivery</span>
+                                 <span className={`text-[13px] font-black italic block ${currentTheme.text}`}>14.2 Hours</span>
+                              </div>
+                              <div className="space-y-1">
+                                 <span className="text-[8px] font-black uppercase tracking-widest text-zinc-400 block">Network Sync</span>
+                                 <div className="flex items-center gap-1.5 mt-0.5">
+                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                    <span className={`text-[9px] font-bold uppercase tracking-widest block leading-none ${theme === 'cyber' ? 'text-emerald-400' : 'text-zinc-600'}`}>Active</span>
+                                 </div>
+                              </div>
+                           </div>
+                        </div>
+                     </div>
+
+                     <div className={`p-4 mt-4 rounded-2xl flex items-center gap-3 border ${theme === 'cyber' ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-zinc-50 border-zinc-100'}`}>
+                        <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" />
+                        <p className="text-[9px] font-bold uppercase tracking-tight text-zinc-500 leading-tight">
+                           Settlement mixes (Paid vs. Credit) are automatically refreshed upon driver proof of delivery.
+                        </p>
+                     </div>
+                  </div>
+                </motion.div>
+
+             </div>
           </div>
         </section>
 
@@ -792,10 +1441,29 @@ export const LandingPage = () => {
                     <span className={`text-2xl font-black italic tracking-tighter uppercase ${currentTheme.text}`}>TracksUp</span>
                 </div>
                 <p className={`text-sm leading-relaxed font-medium transition-colors ${currentTheme.subText}`}> The global system for simple logistics and supply chain tracking. </p>
+                
+                <div className="space-y-1.5 flex flex-col items-center md:items-start">
+                    <span className="text-[9px] font-black uppercase tracking-[0.25em] text-zinc-500">Founder & Lead Architect</span>
+                    <a 
+                      href="https://x.com/iamateequr" 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      className={`text-xs font-black uppercase tracking-[0.15em] italic flex items-center gap-1.5 hover:text-emerald-500 transition-colors ${currentTheme.text}`}
+                    >
+                      <span>Ateequr Rahman</span>
+                      <ArrowUpRight className="h-3.5 w-3.5" />
+                    </a>
+                </div>
+
                 <div className="flex gap-4">
-                    <div className={`h-10 w-10 rounded-full flex items-center justify-center transition-all cursor-pointer ${currentTheme.muted} text-zinc-500 hover:text-emerald-500`}>
+                    <a 
+                        href="https://x.com/iamateequr" 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className={`h-10 w-10 rounded-full flex items-center justify-center transition-all cursor-pointer ${currentTheme.muted} text-zinc-500 hover:text-emerald-500`}
+                    >
                         <Globe className="h-4 w-4" />
-                    </div>
+                    </a>
                     <div className={`h-10 w-10 rounded-full flex items-center justify-center transition-all cursor-pointer ${currentTheme.muted} text-zinc-500 hover:text-emerald-500`}>
                         <Users className="h-4 w-4" />
                     </div>
