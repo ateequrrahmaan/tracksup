@@ -96,9 +96,9 @@ service cloud.firestore {
 
     match /products/{productId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && hasOrgRole(incoming().supplierId, ['supplier', 'owner', 'admin']) && isValidProduct(incoming());
-      allow update: if isSignedIn() && hasOrgRole(existing().supplierId, ['supplier', 'owner', 'admin']) && isValidProduct(incoming());
-      allow delete: if isSignedIn() && hasOrgRole(existing().supplierId, ['supplier', 'owner', 'admin']);
+      allow create: if isSignedIn() && isMemberOf(incoming().supplierId) && isValidProduct(incoming());
+      allow update: if isSignedIn() && isMemberOf(existing().supplierId) && isValidProduct(incoming());
+      allow delete: if isSignedIn() && isMemberOf(existing().supplierId);
     }
 
     // -------------------------------------------------------------------------
@@ -131,24 +131,24 @@ service cloud.firestore {
       allow create: if isSignedIn() && (
         incoming().retailerId == request.auth.uid || 
         isMemberOf(incoming().retailerId) ||
-        hasOrgRole(incoming().supplierId, ['owner', 'admin', 'supplier'])
+        isMemberOf(incoming().supplierId)
       ) && isValidOrder(incoming());
       
       allow update: if isSignedIn() && (
         // Retailer can cancel
         ((isMemberOf(existing().retailerId) || existing().retailerId == request.auth.uid) && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']) && incoming().status == 'cancelled') ||
         
-        // Supplier admin/owner can update everything
-        (hasOrgRole(existing().supplierId, ['supplier', 'owner', 'admin'])) ||
+        // Supplier can update and manage
+        (isMemberOf(existing().supplierId)) ||
         
         // Employee can update status and delivery info if assigned
-        (hasOrgRole(existing().supplierId, ['employee']) && 
+        (isMemberOf(existing().supplierId) && 
          existing().employeeId == request.auth.uid &&
          isValidOrderUpdate(existing(), incoming()) &&
          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'payment_status', 'amount_collected', 'delivered_at', 'updatedAt']))
       );
 
-      allow delete: if isSignedIn() && hasOrgRole(existing().supplierId, ['owner', 'admin', 'supplier']);
+      allow delete: if isSignedIn() && isMemberOf(existing().supplierId);
     }
 
     // -------------------------------------------------------------------------
@@ -156,13 +156,10 @@ service cloud.firestore {
     // -------------------------------------------------------------------------
     match /invites/{inviteId} {
       allow get: if true; 
-      allow list: if isSignedIn() && isMemberOf(resource.data.organizationId);
-      allow create: if isSignedIn() && hasOrgRole(incoming().organizationId, ['supplier', 'retailer', 'owner', 'admin']);
-      allow update: if isSignedIn() && (
-        (incoming().diff(existing()).affectedKeys().hasOnly(['status', 'acceptedBy', 'updatedAt', 'acceptedAt'])) ||
-        hasOrgRole(existing().organizationId, ['supplier', 'retailer', 'owner', 'admin'])
-      );
-      allow delete: if isSignedIn() && hasOrgRole(existing().organizationId, ['supplier', 'retailer', 'owner', 'admin']);
+      allow list: if isSignedIn() && resource.data.organizationId is string;
+      allow create: if isSignedIn() && isMemberOf(incoming().organizationId);
+      allow update: if isSignedIn() && isMemberOf(existing().organizationId);
+      allow delete: if isSignedIn() && isMemberOf(existing().organizationId);
     }
 
     // -------------------------------------------------------------------------
@@ -173,21 +170,37 @@ service cloud.firestore {
              data.description is string && data.description.size() <= 1000 &&
              data.supplierId is string &&
              data.employeeId is string &&
-             data.status in ['pending', 'completed'];
+             data.status in ['assigned', 'accepted', 'in_progress', 'purchased', 'awaiting_approval', 'approved', 'stock_added', 'completed', 'verified'];
     }
 
     match /tasks/{taskId} {
-      allow list: if isSignedIn();
+      allow list: if isSignedIn() && resource.data.supplierId is string;
       allow get: if isSignedIn() && isMemberOf(resource.data.supplierId);
-      allow create: if isSignedIn() && hasOrgRole(incoming().supplierId, ['owner', 'admin', 'supplier']) && isValidTask(incoming());
-      allow update: if isSignedIn() && (
-        (hasOrgRole(existing().supplierId, ['owner', 'admin', 'supplier']) && isValidTask(incoming())) ||
-        (hasOrgRole(existing().supplierId, ['employee']) && 
-         existing().employeeId == request.auth.uid &&
-         incoming().status in ['pending', 'completed'] &&
-         incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']))
-      );
-      allow delete: if isSignedIn() && hasOrgRole(existing().supplierId, ['owner', 'admin', 'supplier']);
+      allow create: if isSignedIn() && isMemberOf(incoming().supplierId) && isValidTask(incoming()) && incoming().createdAt == request.time && incoming().updatedAt == request.time;
+      allow update: if isSignedIn() && isMemberOf(existing().supplierId) && isValidTask(incoming()) && incoming().updatedAt == request.time;
+      allow delete: if isSignedIn() && isMemberOf(existing().supplierId);
+    }
+
+    // -------------------------------------------------------------------------
+    // VENDORS
+    // -------------------------------------------------------------------------
+    function isValidVendor(data) {
+      return data.vendorName is string && data.vendorName.size() > 0 && data.vendorName.size() <= 200 &&
+             data.supplierId is string &&
+             data.status in ['active', 'archived'] &&
+             data.phone is string && data.phone.size() <= 50 &&
+             data.address is string && data.address.size() <= 500 &&
+             data.notes is string && data.notes.size() <= 2000 &&
+             data.productIds is list && data.productIds.size() <= 100 &&
+             (data.productIds.size() == 0 || data.productIds[0] is string);
+    }
+
+    match /vendors/{vendorId} {
+      allow list: if isSignedIn() && resource.data.supplierId is string;
+      allow get: if isSignedIn() && isMemberOf(resource.data.supplierId);
+      allow create: if isSignedIn() && isMemberOf(incoming().supplierId) && isValidVendor(incoming()) && incoming().createdAt == request.time && incoming().updatedAt == request.time;
+      allow update: if isSignedIn() && isMemberOf(existing().supplierId) && isValidVendor(incoming()) && incoming().updatedAt == request.time;
+      allow delete: if isSignedIn() && isMemberOf(existing().supplierId);
     }
   }
 }

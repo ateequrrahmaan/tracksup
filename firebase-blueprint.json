@@ -129,11 +129,32 @@
         "supplierId": { "type": "string", "description": "ID of the supplier organization." },
         "employeeId": { "type": "string", "description": "UID of the employee assigned to the task." },
         "employeeName": { "type": "string", "description": "Name of the assigned employee." },
-        "status": { "type": "string", "enum": ["pending", "completed"], "description": "Task status." },
+        "status": { "type": "string", "enum": ["assigned", "accepted", "in_progress", "purchased", "awaiting_approval", "approved", "stock_added", "completed", "verified"], "description": "Task status." },
         "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp." },
         "updatedAt": { "type": "string", "format": "date-time", "description": "Last update timestamp." }
       },
       "required": ["title", "description", "supplierId", "employeeId", "status"]
+    },
+    "Vendor": {
+      "title": "Vendor",
+      "description": "A supplier-aligned external vendor definition.",
+      "type": "object",
+      "properties": {
+        "supplierId": { "type": "string", "description": "ID of the supplier organization." },
+        "vendorName": { "type": "string", "description": "Name of the vendor." },
+        "phone": { "type": "string", "description": "Vendor contact number." },
+        "address": { "type": "string", "description": "Vendor physical address." },
+        "notes": { "type": "string", "description": "Internal vendor notes." },
+        "productIds": {
+          "type": "array",
+          "description": "List of product IDs supplied by this vendor.",
+          "items": { "type": "string" }
+        },
+        "status": { "type": "string", "enum": ["active", "archived"], "description": "Vendor status." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last update timestamp." }
+      },
+      "required": ["supplierId", "vendorName", "status"]
     }
   },
   "firestore": {
@@ -164,6 +185,10 @@
     "/tasks/{taskId}": {
       "schema": "Task",
       "description": "Internal non-delivery operational chores."
+    },
+    "/vendors/{vendorId}": {
+      "schema": "Vendor",
+      "description": "Sourced external vendors."
     }
   }
 }
