@@ -1,7 +1,8 @@
-import React from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { formatCurrency } from "@/constants";
 import { useAuth } from "@/lib/auth-context";
 import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { 
   DollarSign, 
   Package, 
@@ -10,9 +11,119 @@ import {
   TrendingUp,
   Clock,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  ClipboardList,
+  CheckCircle2,
+  Coins
 } from "lucide-react";
 import { motion } from "motion/react";
+import { db } from "@/lib/firebase";
+import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { Task } from "@/types";
+
+const OpsTaskAnalytics: React.FC = () => {
+  const { activeOrg, preferredCurrency } = useAuth();
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!activeOrg) return;
+    const q = query(collection(db, "tasks"), where("supplierId", "==", activeOrg.id));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Task));
+      setTasks(items);
+      setLoading(false);
+    });
+    return () => unsubscribe();
+  }, [activeOrg]);
+
+  const stats = useMemo(() => {
+    const checklistTasks = tasks.filter(t => t.taskType === "checklist");
+    const clTotal = checklistTasks.length;
+    const clCompleted = checklistTasks.filter(t => t.status === "completed" || t.status === "verified").length;
+
+    const procurementTasks = tasks.filter(t => t.taskType === "procurement");
+    const prTotal = procurementTasks.length;
+    const prAwaiting = procurementTasks.filter(t => t.status === "awaiting_approval").length;
+    const prApproved = procurementTasks.filter(t => t.status === "approved").length;
+    const prStocked = procurementTasks.filter(t => t.status === "stock_added").length;
+
+    // Total purchase value spent
+    let totalPurchasedCost = 0;
+    procurementTasks.filter(t => ["approved", "stock_added"].includes(t.status)).forEach(task => {
+      task.items?.forEach(item => {
+        const qty = item.purchasedQuantity ?? item.quantity;
+        const val = item.purchaseCost ?? 0;
+        totalPurchasedCost += qty * val;
+      });
+    });
+
+    return {
+      clTotal,
+      clCompleted,
+      prTotal,
+      prAwaiting,
+      prApproved,
+      prStocked,
+      totalPurchasedCost
+    };
+  }, [tasks]);
+
+  if (loading) {
+    return <p className="text-zinc-500 font-bold uppercase text-[9px] tracking-widest text-center py-4">Sizing Operations feed...</p>;
+  }
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+      <div className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-4">
+        <div className="flex justify-between items-center">
+          <div className="h-10 w-10 rounded-xl bg-white/10 flex items-center justify-center text-zinc-300">
+            <ClipboardList className="h-5 w-5" />
+          </div>
+          <span className="text-[10px] text-amber-500 font-black uppercase tracking-widest">Checklists Run</span>
+        </div>
+        <div>
+          <h4 className="text-3xl font-black italic tracking-tighter text-white">
+            {stats.clCompleted} / {stats.clTotal}
+          </h4>
+          <p className="text-[9px] text-zinc-400 font-extrabold uppercase mt-1">Verified Completions</p>
+        </div>
+      </div>
+
+      <div className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-4">
+        <div className="flex justify-between items-center">
+          <div className="h-10 w-10 rounded-xl bg-white/10 flex items-center justify-center text-zinc-300">
+            <Coins className="h-5 w-5" />
+          </div>
+          <span className="text-[10px] text-emerald-500 font-black uppercase tracking-widest">Sourced Goods</span>
+        </div>
+        <div>
+          <h4 className="text-3xl font-black italic tracking-tighter text-emerald-400">
+            {formatCurrency(stats.totalPurchasedCost, preferredCurrency)}
+          </h4>
+          <p className="text-[9px] text-zinc-400 font-extrabold uppercase mt-1">Total Sourced Value Issued</p>
+        </div>
+      </div>
+
+      <div className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-4">
+        <div className="flex justify-between items-center">
+          <div className="h-10 w-10 rounded-xl bg-white/10 flex items-center justify-center text-zinc-300">
+            <CheckCircle2 className="h-5 w-5" />
+          </div>
+          <span className="text-[10px] text-indigo-400 font-black uppercase tracking-widest">Intake Gate</span>
+        </div>
+        <div>
+          <h4 className="text-3xl font-black italic tracking-tighter text-white">
+            {stats.prAwaiting} Rvw / {stats.prApproved} Apr
+          </h4>
+          <p className="text-[9px] text-zinc-400 font-extrabold uppercase mt-1">
+            {stats.prStocked} Fully Integrated Stock
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 interface SupplierOverviewProps {
   stats: any;
@@ -145,6 +256,21 @@ export const SupplierOverview: React.FC<SupplierOverviewProps> = ({ stats }) => 
           </div>
         </Card>
       </div>
+
+      {/* Internal Operations Control Hub */}
+      <Card className="rounded-[2.5rem] border-none shadow-sm bg-zinc-900 text-white p-10 mt-8">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+          <div>
+            <h3 className="text-xl font-black uppercase italic tracking-tight text-white">Operations Control Hub</h3>
+            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mt-1">Checklist progress & Procurement pipelines summary</p>
+          </div>
+          <Badge className="bg-white/10 text-zinc-200 border-none font-bold uppercase text-[9px] py-1 px-3">
+            Realtime Analytics Vector
+          </Badge>
+        </div>
+
+        <OpsTaskAnalytics />
+      </Card>
     </div>
   );
 };

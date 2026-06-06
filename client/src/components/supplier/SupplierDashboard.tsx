@@ -23,6 +23,7 @@ import { SupplierProducts } from "./components/SupplierProducts";
 import { SupplierInventory } from "./components/SupplierInventory";
 import { StrategicTools } from "./components/StrategicTools";
 import { SupplierTasks } from "./components/SupplierTasks";
+import { SupplierVendors } from "./components/SupplierVendors";
 import { SettingsView } from "../shared/SettingsView";
 
 import { useLocation } from "react-router-dom";
@@ -39,9 +40,10 @@ export const SupplierDashboard = () => {
     if (location.pathname === "/supplier/strategy") return "strategy";
     if (location.pathname === "/supplier/retailers" || location.pathname === "/supplier/employees") return "network";
     if (location.pathname === "/supplier/products") return "products";
+    if (location.pathname === "/supplier/tasks") return "tasks";
+    if (location.pathname === "/supplier/vendors") return "vendors";
     if (location.pathname === "/supplier/inventory") return "inventory";
     if (location.pathname === "/supplier/invites") return "invites";
-    if (location.pathname === "/supplier/tasks") return "tasks";
     if (location.pathname === "/settings") return "settings";
     return "overview";
   }, [location.pathname]);
@@ -533,6 +535,7 @@ export const SupplierDashboard = () => {
         />
       )}
       {activeTab === "tasks" && <SupplierTasks employees={employees} />}
+      {activeTab === "vendors" && <SupplierVendors />}
       {activeTab === "settings" && <SettingsView />}
 
       {/* Dialogs */}

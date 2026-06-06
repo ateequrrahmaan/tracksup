@@ -86,6 +86,38 @@ export interface Product {
   createdAt: Timestamp;
 }
 
+export interface Vendor {
+  id: string;
+  supplierId: string;
+  vendorName: string;
+  phone: string;
+  address: string;
+  notes: string;
+  productIds: string[]; // mapped product IDs Supplied by this vendor
+  status: "active" | "archived";
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+export type TaskType = "checklist" | "procurement";
+export type TaskPriority = "low" | "medium" | "high";
+
+export interface ChecklistItem {
+  text: string;
+  completed: boolean;
+}
+
+export interface ProcurementItem {
+  productId: string;
+  productName: string;
+  quantity: number; // supplier requested qty
+  purchasedQuantity?: number; // employee actual purchased qty
+  purchaseCost?: number; // employee actual purchase cost per unit
+  sellingPrice?: number; // supplier approved selling price
+  margin?: number; // calculated margin %
+  warehouseLocation?: string; // future-ready warehouse location string
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -93,7 +125,21 @@ export interface Task {
   supplierId: string;
   employeeId: string;
   employeeName: string;
-  status: "pending" | "completed";
+  taskType: TaskType;
+  priority?: TaskPriority;
+  dueDate?: string; // YYYY-MM-DD format
+  status: string; // "pending" | "completed" for legacy, or TaskStatus values: "assigned" | "accepted" | "in_progress" | "completed" | "verified" | "purchased" | "awaiting_approval" | "approved" | "stock_added"
+  
+  // Checklist fields
+  checklist?: ChecklistItem[];
+  
+  // Procurement fields
+  vendorId?: string;
+  vendorName?: string;
+  items?: ProcurementItem[];
+  paymentStatus?: "Paid" | "Credit";
+  employeeNotes?: string;
+
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }

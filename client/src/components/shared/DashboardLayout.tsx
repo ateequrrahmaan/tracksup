@@ -21,7 +21,8 @@ import {
   Menu,
   X,
   CheckCircle,
-  ClipboardList
+  ClipboardList,
+  Building
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { auth } from "@/lib/firebase";
@@ -64,6 +65,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       { id: "employees", label: "Employees", icon: Users, path: "/supplier/employees" },
       { id: "products", label: "Products", icon: Box, path: "/supplier/products" },
       { id: "tasks", label: "Tasks", icon: ClipboardList, path: "/supplier/tasks" },
+      { id: "vendors", label: "Vendors", icon: Building, path: "/supplier/vendors" },
       { id: "inventory", label: "Inventory", icon: Package, path: "/supplier/inventory" },
       { id: "performance", label: "Performance", icon: TrendingUp, path: "/supplier/performance" },
       { id: "strategy", label: "Strategy", icon: Zap, path: "/supplier/strategy" },
@@ -259,7 +261,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             )}
           </div>
 
-          <nav className="flex-1 space-y-1 overflow-y-auto scrollbar-hide">
+          <nav className="flex-1 space-y-1 overflow-y-auto overflow-x-hidden scrollbar-hide">
             {/* Org Switcher for Multiple Orgs */}
             {memberships.length > 1 && !isCollapsed && activeRole === 'retailer' && (
               <div className="mb-6 px-2">

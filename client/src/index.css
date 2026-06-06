@@ -137,3 +137,13 @@
   50% { transform: translateX(100%); }
   100% { transform: translateX(-100%); }
 }
+
+/* Custom utility to hide default scrollbars while preserving scroll functionality */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
