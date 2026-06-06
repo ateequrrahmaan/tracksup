@@ -46,6 +46,8 @@ import {
 } from "lucide-react";
 import { motion } from "motion/react";
 
+const VIDEO_URL = "https://raw.githubusercontent.com/ateequrrahmaan/video/main/video.mp4";
+
 const formatTime = (time: number) => {
   if (isNaN(time)) return "00:00";
   const mins = Math.floor(time / 60);
@@ -184,7 +186,7 @@ export const LandingPage = () => {
   };
 
   // Video Teaser and Custom Interactive Player States
-  const [videoSrc, setVideoSrc] = useState<string>("/video.mp4");
+  const [videoSrc, setVideoSrc] = useState<string>(VIDEO_URL);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
   const [videoDuration, setVideoDuration] = useState(0);
@@ -705,7 +707,7 @@ export const LandingPage = () => {
                 onError={() => {
                   console.log("Video failed to load: ", videoSrc);
                   const fallbacks = [
-                    "/video.mp4",
+                    VIDEO_URL,
                     "https://assets.mixkit.co/videos/preview/mixkit-logistic-worker-scanning-codes-on-boxes-42437-large.mp4"
                   ];
                   const currentIndex = fallbacks.indexOf(videoSrc);
@@ -770,7 +772,7 @@ export const LandingPage = () => {
                       <button 
                         onClick={() => {
                           setVideoError(false);
-                          setVideoSrc("/video.mp4");
+                          setVideoSrc(VIDEO_URL);
                           if (videoRef.current) {
                             videoRef.current.load();
                             videoRef.current.play().catch(e => console.error("Playback retry failed", e));
