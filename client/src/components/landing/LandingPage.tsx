@@ -40,8 +40,18 @@ import {
   Pause,
   Volume2,
   VolumeX,
+  Maximize2,
+  UploadCloud,
+  Tv
 } from "lucide-react";
 import { motion } from "motion/react";
+
+const formatTime = (time: number) => {
+  if (isNaN(time)) return "00:00";
+  const mins = Math.floor(time / 60);
+  const secs = Math.floor(time % 60);
+  return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+};
 
 const FlowStep = ({ icon: Icon, title, desc, step, theme }: { icon: any, title: string, desc: string, step: string, theme: string }) => (
   <motion.div 
@@ -173,9 +183,14 @@ export const LandingPage = () => {
     setSubscribeModalOpen(true);
   };
 
-  const [isPlaying, setIsPlaying] = useState(true);
+  // Video Teaser and Custom Interactive Player States
+  const [videoSrc, setVideoSrc] = useState<string>("/video.mp4");
+  const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
+  const [videoDuration, setVideoDuration] = useState(0);
+  const [currentVideoTime, setCurrentVideoTime] = useState(0);
   const [videoError, setVideoError] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const togglePlay = () => {
@@ -191,11 +206,72 @@ export const LandingPage = () => {
   };
 
   const toggleMute = () => {
+    if (!videoRef.current) return;
+    videoRef.current.muted = !isMuted;
     setIsMuted(!isMuted);
   };
 
+  const handleTimeUpdate = () => {
+    if (!videoRef.current) return;
+    setCurrentVideoTime(videoRef.current.currentTime);
+  };
+
   const handleLoadedMetadata = () => {
+    if (!videoRef.current) return;
+    setVideoDuration(videoRef.current.duration);
     setVideoError(false);
+  };
+
+  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!videoRef.current) return;
+    const seekTime = parseFloat(e.target.value);
+    videoRef.current.currentTime = seekTime;
+    setCurrentVideoTime(seekTime);
+  };
+
+  const handleFullscreen = () => {
+    if (!videoRef.current) return;
+    if (videoRef.current.requestFullscreen) {
+      videoRef.current.requestFullscreen();
+    }
+  };
+
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const file = e.dataTransfer.files[0];
+      if (file.type.startsWith("video/")) {
+        const objectUrl = URL.createObjectURL(file);
+        setVideoSrc(objectUrl);
+        setVideoError(false);
+        setIsPlaying(false);
+      }
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      if (file.type.startsWith("video/")) {
+        const objectUrl = URL.createObjectURL(file);
+        setVideoSrc(objectUrl);
+        setVideoError(false);
+        setIsPlaying(false);
+      }
+    }
   };
 
   const demoCurrentRevenue = 320000;
@@ -593,67 +669,188 @@ export const LandingPage = () => {
           </div>
         </section>
 
-        {/* Landing page video hero */}
+        {/* Interactive System Walkthrough Teaser/Video Section */}
         <section id="demo" className={`py-20 md:py-32 px-6 md:px-16 lg:px-24 border-t relative overflow-hidden transition-colors duration-700 ${currentTheme.muted}`}>
+          {/* Decorative gradients */}
           <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full blur-[120px] pointer-events-none -z-10 transition-colors duration-1000 ${theme === 'cyber' ? 'bg-emerald-500/5' : theme === 'midnight' ? 'bg-blue-500/5' : 'bg-zinc-200/20'}`} />
 
           <div className="max-w-7xl mx-auto">
             <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-8 mb-16">
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
-                  <h2 className={`text-[10px] font-black uppercase tracking-[0.5em] italic ${theme === 'midnight' ? 'text-blue-500' : 'text-emerald-500'}`}>Product Video</h2>
+                  <Tv className={`h-5 w-5 ${theme === 'midnight' ? 'text-blue-500' : 'text-emerald-500'}`} />
+                  <h2 className={`text-[10px] font-black uppercase tracking-[0.5em] italic ${theme === 'midnight' ? 'text-blue-500' : 'text-emerald-500'}`}>Interactive Showcase</h2>
                 </div>
-                <h3 className={`text-4xl md:text-6xl font-black uppercase italic tracking-tighter leading-none ${currentTheme.text}`}>Watch It In Motion</h3>
+                <h3 className={`text-4xl md:text-6xl font-black uppercase italic tracking-tighter leading-none ${currentTheme.text}`}>System Walkthrough</h3>
               </div>
               <p className={`font-medium max-w-md text-base md:text-lg transition-colors ${currentTheme.subText}`}>
-                The landing page now plays the local walkthrough video automatically, loops it, and keeps only pause and mute controls.
+                Experience the live tracking console, proof-of-delivery flows, and real-time ledger settlement of the TracksUp operating system.
               </p>
             </div>
 
-            <div className={`relative aspect-video w-full rounded-[2.5rem] md:rounded-[3.5rem] overflow-hidden border transition-all duration-700 shadow-2xl ${theme === 'cyber' ? 'border-emerald-500/20 bg-black' : theme === 'midnight' ? 'border-blue-900/30 bg-slate-950' : 'border-zinc-200 bg-zinc-50'}`}>
+            {/* Custom Interactive Video Player Frame */}
+            <div 
+              className={`relative aspect-video w-full rounded-[2.5rem] md:rounded-[3.5rem] overflow-hidden border transition-all duration-700 group/player shadow-2xl ${
+                theme === 'cyber' ? 'border-emerald-500/20 bg-black' : theme === 'midnight' ? 'border-blue-900/30 bg-slate-950' : 'border-zinc-200 bg-zinc-50'
+              }`}
+            >
+              {/* Actual Video Element */}
               <video
                 ref={videoRef}
+                src={videoSrc}
+                onTimeUpdate={handleTimeUpdate}
                 onLoadedMetadata={handleLoadedMetadata}
                 onPlay={() => setIsPlaying(true)}
                 onPause={() => setIsPlaying(false)}
-                onError={() => setVideoError(true)}
+                onError={() => {
+                  console.log("Video failed to load: ", videoSrc);
+                  const fallbacks = [
+                    "/video.mp4",
+                    "https://assets.mixkit.co/videos/preview/mixkit-logistic-worker-scanning-codes-on-boxes-42437-large.mp4"
+                  ];
+                  const currentIndex = fallbacks.indexOf(videoSrc);
+                  if (currentIndex >= 0 && currentIndex < fallbacks.length - 1) {
+                    const nextSrc = fallbacks[currentIndex + 1];
+                    console.log("Stepping to fallback source: ", nextSrc);
+                    setVideoSrc(nextSrc);
+                  } else {
+                    console.error("All fallback video URLs failed.");
+                    setVideoError(true);
+                  }
+                }}
+                onClick={togglePlay}
                 className="w-full h-full object-cover relative z-10 block"
                 playsInline
                 autoPlay
-                muted={isMuted}
+                muted
                 loop
-                src="/video.mp4"
               />
 
+              {/* Decorative Scanlines for Cyber Theme */}
               {theme === 'cyber' && (
                 <div className="absolute inset-0 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] bg-[size:100%_4px,6px_100%] pointer-events-none z-20 opacity-30" />
               )}
 
+              {/* Error/Fallback Custom Interactive Demo State */}
               {videoError && (
-                <div className={`absolute inset-0 z-20 flex items-center justify-center p-8 text-center transition-colors ${theme === 'cyber' ? 'bg-black/90' : 'bg-zinc-950/95'}`}>
-                  <p className="max-w-md text-sm font-semibold text-zinc-300">
-                    Video preview unavailable. Check <span className="text-emerald-400">/video.mp4</span> in the public folder.
-                  </p>
+                <div className={`absolute inset-0 z-20 flex flex-col items-center justify-center p-8 text-center transition-colors ${theme === 'cyber' ? 'bg-black/90' : 'bg-zinc-950/95'}`}>
+                  {/* Elegant micro-UI representing the walk-through keyframes */}
+                  <div className="absolute inset-0 opacity-15 pointer-events-none flex items-center justify-center">
+                    <div className="grid grid-cols-3 gap-6 w-5/6">
+                      <div className="aspect-video bg-zinc-800 rounded-2xl border border-zinc-700 p-3 space-y-2">
+                        <div className="h-3 w-1/3 bg-zinc-600 rounded" />
+                        <div className="h-2 w-full bg-zinc-700 rounded" />
+                        <span className="text-[7px] text-zinc-500 font-mono">STATION_NODE: ACTIVE</span>
+                      </div>
+                      <div className="aspect-video bg-zinc-800 rounded-2xl border border-zinc-700 p-3 flex flex-col justify-between">
+                        <div className="h-5 w-5 bg-emerald-500/20 rounded-full flex items-center justify-center text-emerald-400 text-[8px] font-bold">✔</div>
+                        <span className="text-[7px] text-zinc-500 font-mono">DELIVERY_CONFIRMED</span>
+                      </div>
+                      <div className="aspect-video bg-zinc-800 rounded-2xl border border-zinc-700 p-3 space-y-2">
+                        <div className="h-1.5 w-1/2 bg-zinc-600 rounded" />
+                        <div className="h-1.5 w-[80%] bg-zinc-700 rounded" />
+                        <div className="h-1.5 w-[60%] bg-zinc-700 rounded" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="relative z-30 max-w-lg space-y-6">
+                    <div className="inline-flex h-16 w-16 items-center justify-center rounded-3xl bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 animate-pulse">
+                      <Tv className="h-8 w-8" />
+                    </div>
+
+                    <div className="space-y-2">
+                      <h4 className="text-xl md:text-2xl font-black uppercase italic tracking-tight text-white leading-tight">Walkthrough Video Unavailable</h4>
+                      <p className="text-xs font-semibold text-zinc-400 leading-normal">
+                        The walkthrough stream failed to load. Click below to re-initialize and retry the playback.
+                      </p>
+                    </div>
+
+                    <div className="pt-2">
+                      <button 
+                        onClick={() => {
+                          setVideoError(false);
+                          setVideoSrc("/video.mp4");
+                          if (videoRef.current) {
+                            videoRef.current.load();
+                            videoRef.current.play().catch(e => console.error("Playback retry failed", e));
+                          }
+                        }}
+                        className={`inline-flex items-center gap-3 h-12 px-6 rounded-xl font-black uppercase tracking-widest text-[10px] italic transition-all hover:scale-105 active:scale-95 cursor-pointer ${theme === 'cyber' ? 'bg-emerald-500 text-black hover:bg-emerald-400' : 'bg-white text-zinc-900 hover:bg-zinc-100'}`}
+                      >
+                        Retry Stream
+                      </button>
+                    </div>
+
+                    <div className="flex gap-4 justify-center text-[8px] font-mono font-bold text-zinc-500 pt-4 border-t border-zinc-900">
+                      <span>▶ DRIVER APP FLOWS</span>
+                      <span>•</span>
+                      <span>▶ LEDGER DEPLOYMENT</span>
+                      <span>•</span>
+                      <span>▶ RETAIL OVERVIEW</span>
+                    </div>
+                  </div>
                 </div>
               )}
 
+              {/* Hover custom media player HUD */}
               {!videoError && (
-                <div className="absolute inset-x-0 bottom-0 z-30 p-5 bg-linear-to-t from-black/80 via-black/45 to-transparent">
-                  <div className="flex items-center justify-end gap-3">
-                    <button
-                      onClick={togglePlay}
-                      className="inline-flex items-center justify-center h-11 w-11 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
-                      aria-label={isPlaying ? "Pause video" : "Play video"}
-                    >
-                      {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 fill-white" />}
-                    </button>
-                    <button
-                      onClick={toggleMute}
-                      className="inline-flex items-center justify-center h-11 w-11 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
-                      aria-label={isMuted ? "Unmute video" : "Mute video"}
-                    >
-                      {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-                    </button>
+                <div className="absolute inset-x-0 bottom-0 z-30 p-6 bg-gradient-to-t from-black/80 via-black/40 to-transparent translate-y-2 opacity-0 group-hover/player:translate-y-0 group-hover/player:opacity-100 transition-all duration-300">
+                  <div className="space-y-4">
+                    {/* Time Progress slider */}
+                    <div className="flex items-center gap-4">
+                      <span className="text-[10px] font-mono text-zinc-300 font-bold leading-none">
+                        {formatTime(currentVideoTime)}
+                      </span>
+                      <input
+                        type="range"
+                        min="0"
+                        max={videoDuration || 100}
+                        step="0.1"
+                        value={currentVideoTime}
+                        onChange={handleSeek}
+                        className="flex-1 accent-emerald-500 h-1 bg-zinc-700 rounded-lg cursor-pointer appearance-none range-sm [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-emerald-500 hover:[&::-webkit-slider-thumb]:scale-110"
+                      />
+                      <span className="text-[10px] font-mono text-zinc-300 font-bold leading-none">
+                        {formatTime(videoDuration)}
+                      </span>
+                    </div>
+
+                    {/* HUD Controls */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <button 
+                          onClick={togglePlay}
+                          className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"
+                          aria-label={isPlaying ? "Pause" : "Play"}
+                        >
+                          {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 fill-white" />}
+                        </button>
+                        
+                        <button 
+                          onClick={toggleMute}
+                          className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"
+                          aria-label={isMuted ? "Unmute" : "Mute"}
+                        >
+                          {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+                        </button>
+
+                        <div className="text-[9px] font-black uppercase text-zinc-400 tracking-widest italic flex items-center gap-2">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+                          <span>Walkthrough Stream</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <button 
+                          onClick={handleFullscreen}
+                          className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"
+                          aria-label="Fullscreen"
+                        >
+                          <Maximize2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
