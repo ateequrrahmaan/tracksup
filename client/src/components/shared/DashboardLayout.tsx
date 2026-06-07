@@ -399,16 +399,19 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
       {/* Mobile Bottom Navigation */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-zinc-100 px-4 py-3 flex justify-around items-center z-50 shadow-[0_-10px_30px_rgba(0,0,0,0.05)]">
-        {[
-          { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, path: `/${activeRole}` },
-          { id: "orders", label: "Orders", icon: Box, path: `/${activeRole}/orders` },
-          { 
-            id: "products", 
-            label: activeRole === 'retailer' ? "Market" : "Inventory", 
-            icon: activeRole === 'retailer' ? Store : Box, 
-            path: activeRole === 'retailer' ? "/retailer/marketplace" : (activeRole === 'employee' ? "/employee/history" : "/supplier/products")
-          },
-        ].map((item) => (
+        {(activeRole === 'employee' ? [
+          { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, path: "/employee" },
+          { id: "orders", label: "Orders", icon: Box, path: "/employee/orders" },
+          { id: "history", label: "Deliveries", icon: History, path: "/employee/history" },
+        ] : activeRole === 'retailer' ? [
+          { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, path: "/retailer" },
+          { id: "orders", label: "Orders", icon: Box, path: "/retailer/orders" },
+          { id: "marketplace", label: "Market", icon: Store, path: "/retailer/marketplace" },
+        ] : [
+          { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, path: "/supplier" },
+          { id: "orders", label: "Orders", icon: Box, path: "/supplier/orders" },
+          { id: "products", label: "Inventory", icon: Package, path: "/supplier/products" },
+        ]).map((item) => (
           <Link
             key={item.id}
             to={item.path}
