@@ -63,12 +63,19 @@ export const EmployeeDetail = () => {
         // Fetch Orders assigned to this employee within this org
         const ordersQuery = query(
           collection(db, "orders"),
-          where("organizationId", "==", activeOrg.id),
-          where("employeeId", "==", id),
-          orderBy("updatedAt", "desc")
+          where("supplierId", "==", activeOrg.id)
         );
         const ordersSnap = await getDocs(ordersQuery);
-        const ordersData = ordersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }) as Order);
+        const allOrders = ordersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }) as Order);
+        
+        const ordersData = allOrders
+          .filter(o => o.employeeId === id)
+          .sort((a, b) => {
+            const tA = a.updatedAt?.toDate ? a.updatedAt.toDate().getTime() : (a.updatedAt ? new Date(a.updatedAt as any).getTime() : 0);
+            const tB = b.updatedAt?.toDate ? b.updatedAt.toDate().getTime() : (b.updatedAt ? new Date(b.updatedAt as any).getTime() : 0);
+            return tB - tA;
+          });
+          
         setOrders(ordersData);
 
         // Calculate Stats
@@ -236,7 +243,10 @@ export const EmployeeDetail = () => {
                             </Badge>
                           </TableCell>
                           <TableCell className="text-xs text-zinc-500">
-                            {new Date(order.updatedAt?.toDate()).toLocaleString()}
+                            {order.updatedAt
+                              ? (order.updatedAt.toDate ? order.updatedAt.toDate().toLocaleString() : new Date(order.updatedAt as any).toLocaleString())
+                              : "N/A"
+                            }
                           </TableCell>
                           <TableCell className="text-right font-medium">
                             {formatCurrency(order.totalAmount, preferredCurrency)}

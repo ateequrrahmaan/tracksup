@@ -63,19 +63,26 @@ export const RetailerDetail = () => {
         // Fetch Orders for this retailer within this org
         const ordersQuery = query(
           collection(db, "orders"),
-          where("organizationId", "==", activeOrg.id),
-          where("retailerId", "==", id),
-          orderBy("createdAt", "desc")
+          where("supplierId", "==", activeOrg.id)
         );
         const ordersSnap = await getDocs(ordersQuery);
-        const ordersData = ordersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }) as Order);
+        const allOrders = ordersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }) as Order);
+        
+        const ordersData = allOrders
+          .filter(o => o.retailerId === id)
+          .sort((a, b) => {
+            const tA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : (a.createdAt ? new Date(a.createdAt as any).getTime() : 0);
+            const tB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : (b.createdAt ? new Date(b.createdAt as any).getTime() : 0);
+            return tB - tA;
+          });
+
         setOrders(ordersData);
 
         // Calculate Stats
         const revenue = ordersData.reduce((acc, curr) => acc + (curr.totalAmount || 0), 0);
         const pending = ordersData.filter(o => o.status !== "delivered").length;
-        const lastOrder = ordersData.length > 0 
-          ? new Date(ordersData[0].createdAt?.toDate()).toLocaleDateString() 
+        const lastOrder = ordersData.length > 0 && ordersData[0].createdAt
+          ? (ordersData[0].createdAt.toDate ? ordersData[0].createdAt.toDate().toLocaleDateString() : new Date(ordersData[0].createdAt as any).toLocaleDateString())
           : "No orders yet";
 
         setStats({
@@ -228,7 +235,12 @@ export const RetailerDetail = () => {
                       orders.map(order => (
                         <TableRow key={`retailer-order-${order.id}`}>
                           <TableCell className="font-mono text-xs uppercase">{order.id.substring(0, 8)}</TableCell>
-                          <TableCell>{new Date(order.createdAt?.toDate()).toLocaleDateString()}</TableCell>
+                          <TableCell>
+                            {order.createdAt
+                              ? (order.createdAt.toDate ? order.createdAt.toDate().toLocaleDateString() : new Date(order.createdAt as any).toLocaleDateString())
+                              : "N/A"
+                            }
+                          </TableCell>
                           <TableCell className="font-medium">{formatCurrency(order.totalAmount, preferredCurrency)}</TableCell>
                           <TableCell>
                             <Badge variant={(

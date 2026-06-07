@@ -178,6 +178,28 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["organizationId", "productId", "productName", "movementType", "quantity", "direction", "sourceType", "performedBy"]
+    },
+    "VendorPaymentLedger": {
+      "title": "VendorPaymentLedger",
+      "description": "Chronological vendor liability and settlement payments log book.",
+      "type": "object",
+      "properties": {
+        "organizationId": { "type": "string", "description": "Supplier organization ID." },
+        "vendorId": { "type": "string", "description": "ID of the target vendor." },
+        "vendorName": { "type": "string", "description": "Name of the target vendor." },
+        "transactionType": { "type": "string", "enum": ["Procurement Credit", "Vendor Payment", "Adjustment", "Refund", "Write-off"] },
+        "amount": { "type": "number", "description": "The transaction cash value." },
+        "status": { "type": "string", "enum": ["Outstanding", "Partially Settled", "Settled", "Completed"] },
+        "remainingAmount": { "type": "number", "description": "For credit entries, remaining layout due." },
+        "referenceType": { "type": "string", "enum": ["procurement", "payment", "adjustment"] },
+        "referenceId": { "type": "string" },
+        "referenceNumber": { "type": "string" },
+        "notes": { "type": "string" },
+        "createdBy": { "type": "string", "description": "Name or identity of the person recording this." },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["organizationId", "vendorId", "vendorName", "transactionType", "amount", "status"]
     }
   },
   "firestore": {
@@ -216,6 +238,10 @@
     "/inventory_movements/{movementId}": {
       "schema": "InventoryMovement",
       "description": "Chronological product stock movement ledger entries."
+    },
+    "/vendor_payment_ledger/{ledgerId}": {
+      "schema": "VendorPaymentLedger",
+      "description": "Registry of vendor liability records and payments."
     }
   }
 }

@@ -130,7 +130,91 @@ interface SupplierOverviewProps {
 }
 
 export const SupplierOverview: React.FC<SupplierOverviewProps> = ({ stats }) => {
-  const { preferredCurrency } = useAuth();
+  const { preferredCurrency, activeOrg } = useAuth();
+  const [ledger, setLedger] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!activeOrg) return;
+    const q = query(
+      collection(db, "vendor_payment_ledger"),
+      where("organizationId", "==", activeOrg.id)
+    );
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setLedger(items);
+    }, (err) => {
+      console.error("Dashboard ledger subscription error:", err);
+    });
+    return () => unsubscribe();
+  }, [activeOrg]);
+
+  // Outstanding Vendor Liabilities: total outstanding of all Procurement Credit entries
+  const outstandingLiabilities = useMemo(() => {
+    return ledger
+      .filter(l => l.transactionType === "Procurement Credit")
+      .reduce((sum, l) => sum + (l.remainingAmount !== undefined ? l.remainingAmount : l.amount), 0);
+  }, [ledger]);
+
+  // Lifetime Vendor Credit: sum of all credit lines issues
+  const totalVendorCredit = useMemo(() => {
+    return ledger
+      .filter(l => l.transactionType === "Procurement Credit")
+      .reduce((sum, l) => sum + l.amount, 0);
+  }, [ledger]);
+
+  // Recently Settled Vendors: unique vendors completely settled recently
+  const recentlySettled = useMemo(() => {
+    const settledTransactions = ledger
+      .filter(l => l.transactionType === "Procurement Credit" && l.status === "Settled")
+      .sort((a, b) => {
+        const tA = a.updatedAt?.seconds || 0;
+        const tB = b.updatedAt?.seconds || 0;
+        return tB - tA;
+      });
+
+    const seenVendors = new Set();
+    const list: any[] = [];
+    
+    settledTransactions.forEach(item => {
+      if (!seenVendors.has(item.vendorId)) {
+        seenVendors.add(item.vendorId);
+        list.push({
+          vendorId: item.vendorId,
+          vendorName: item.vendorName,
+          amount: item.amount,
+          settledAt: item.updatedAt ? (item.updatedAt.toDate ? item.updatedAt.toDate().toLocaleDateString() : new Date(item.updatedAt).toLocaleDateString()) : "Recently"
+        });
+      }
+    });
+
+    return list.slice(0, 4);
+  }, [ledger]);
+
+  // Highest Outstanding Vendors: group outstanding balance by vendor and sort descending
+  const highestOutstanding = useMemo(() => {
+    const vendorMap: Record<string, { vendorId: string; vendorName: string; balance: number }> = {};
+
+    ledger
+      .filter(l => l.transactionType === "Procurement Credit" && (l.status === "Outstanding" || l.status === "Partially Settled"))
+      .forEach(l => {
+        const bal = l.remainingAmount !== undefined ? l.remainingAmount : l.amount;
+        if (bal > 0) {
+          if (!vendorMap[l.vendorId]) {
+            vendorMap[l.vendorId] = {
+              vendorId: l.vendorId,
+              vendorName: l.vendorName,
+              balance: 0
+            };
+          }
+          vendorMap[l.vendorId].balance += bal;
+        }
+      });
+
+    return Object.values(vendorMap)
+      .sort((a, b) => b.balance - a.balance)
+      .slice(0, 4);
+  }, [ledger]);
+
   const cards = [
     { 
       label: "Gross Revenue", 
@@ -253,6 +337,97 @@ export const SupplierOverview: React.FC<SupplierOverviewProps> = ({ stats }) => 
                    <p className="text-xs font-black italic">{formatCurrency(ret.revenue, preferredCurrency)}</p>
                 </div>
              ))}
+          </div>
+        </Card>
+      </div>
+      
+      {/* Vendor Credit & Liabilities Management Hub */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <Card className="lg:col-span-4 rounded-[2.5rem] border-none shadow-sm bg-white p-8 flex flex-col justify-between">
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-lg font-black uppercase italic tracking-tight">Financial Dues</h3>
+              <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mt-1">Outstanding liabilities</p>
+            </div>
+            
+            <div className="space-y-2">
+              <p className="text-[10px] font-black uppercase tracking-widest text-rose-500">Total Owed to Vendors</p>
+              <h4 className="text-4xl font-black italic tracking-tighter text-rose-600">
+                {formatCurrency(outstandingLiabilities, preferredCurrency)}
+              </h4>
+            </div>
+
+            <div className="space-y-2 pt-4 border-t border-zinc-100">
+              <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Lifetime Credited Sourcing</p>
+              <p className="text-2xl font-black italic tracking-tighter text-zinc-900">
+                {formatCurrency(totalVendorCredit, preferredCurrency)}
+              </p>
+            </div>
+          </div>
+          
+          <div className="pt-6">
+            <Badge variant="outline" className="text-[9px] font-black uppercase py-1 px-3">
+              FIFO Settlement Matcher
+            </Badge>
+          </div>
+        </Card>
+
+        <Card className="lg:col-span-8 rounded-[2.5rem] border-none shadow-sm bg-white p-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* Highest Outstanding Vendors */}
+            <div className="space-y-4">
+              <div>
+                <h4 className="text-sm font-black uppercase italic tracking-tight">Highest Dues</h4>
+                <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Where we owe the most</p>
+              </div>
+
+              {highestOutstanding.length > 0 ? (
+                <div className="space-y-3">
+                  {highestOutstanding.map(v => (
+                    <div key={v.vendorId} className="flex justify-between items-center p-3 rounded-xl bg-zinc-50 hover:bg-zinc-100/75 transition-colors">
+                      <span className="text-xs font-black uppercase tracking-tight text-zinc-800 line-clamp-1">{v.vendorName}</span>
+                      <span className="text-xs font-black italic text-rose-600 shrink-0">
+                        {formatCurrency(v.balance, preferredCurrency)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-zinc-400 bg-zinc-50 rounded-2xl">
+                  <p className="text-[9px] font-black uppercase tracking-wider">Zero Liability</p>
+                  <p className="text-[8px] font-medium text-zinc-400 mt-1">All vendor credits settled perfectly!</p>
+                </div>
+              )}
+            </div>
+
+            {/* Recently Settled Vendors */}
+            <div className="space-y-4">
+              <div>
+                <h4 className="text-sm font-black uppercase italic tracking-tight">Recently Settled</h4>
+                <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Recently fully cleared</p>
+              </div>
+
+              {recentlySettled.length > 0 ? (
+                <div className="space-y-3">
+                  {recentlySettled.map(v => (
+                    <div key={v.vendorId} className="flex justify-between items-center p-3 rounded-xl bg-zinc-50 hover:bg-zinc-100/75 transition-colors">
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-tight text-zinc-800 line-clamp-1">{v.vendorName}</p>
+                        <p className="text-[8px] text-zinc-400 font-bold uppercase">{v.settledAt}</p>
+                      </div>
+                      <Badge variant="success" className="text-[8px] font-black uppercase tracking-wider rounded-md py-0.5">
+                        Settled
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-zinc-400 bg-zinc-50 rounded-2xl">
+                  <p className="text-[9px] font-black uppercase tracking-wider">No recent settlements</p>
+                  <p className="text-[8px] font-medium text-zinc-400 mt-1">Clear outstanding metrics above.</p>
+                </div>
+              )}
+            </div>
           </div>
         </Card>
       </div>

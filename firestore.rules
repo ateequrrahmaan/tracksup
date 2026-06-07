@@ -190,5 +190,12 @@ service cloud.firestore {
     match /inventory_movements/{movementId} {
       allow read, write: if isSignedIn();
     }
+
+    // -------------------------------------------------------------------------
+    // VENDOR PAYMENT LEDGER
+    // -------------------------------------------------------------------------
+    match /vendor_payment_ledger/{ledgerId} {
+      allow read, write: if isSignedIn();
+    }
   }
 }

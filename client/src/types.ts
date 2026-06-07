@@ -157,6 +157,39 @@ export enum MovementType {
   TRANSFER = "transfer"
 }
 
+export enum VendorTransactionType {
+  PROCUREMENT_CREDIT = "Procurement Credit",
+  VENDOR_PAYMENT = "Vendor Payment",
+  ADJUSTMENT = "Adjustment",
+  REFUND = "Refund",
+  WRITE_OFF = "Write-off"
+}
+
+export enum SettlementStatus {
+  OUTSTANDING = "Outstanding",
+  PARTIALLY_SETTLED = "Partially Settled",
+  SETTLED = "Settled",
+  COMPLETED = "Completed"
+}
+
+export interface VendorPaymentLedger {
+  id: string;
+  organizationId: string;
+  vendorId: string;
+  vendorName: string;
+  transactionType: VendorTransactionType;
+  amount: number;
+  status: SettlementStatus;
+  remainingAmount?: number;
+  referenceType?: "procurement" | "payment" | "adjustment" | string;
+  referenceId?: string;
+  referenceNumber?: string;
+  notes?: string;
+  createdBy?: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
 export interface InventoryMovement {
   id: string;
   organizationId: string;

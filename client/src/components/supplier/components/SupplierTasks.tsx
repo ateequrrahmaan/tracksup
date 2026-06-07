@@ -46,7 +46,7 @@ import {
   Coins
 } from "lucide-react";
 import { toast } from "sonner";
-import { Task, SystemUser, Vendor, Product, ProcurementItem } from "@/types";
+import { Task, SystemUser, Vendor, Product, ProcurementItem, VendorTransactionType, SettlementStatus } from "@/types";
 import { motion, AnimatePresence } from "motion/react";
 import { formatCurrency } from "@/constants";
 
@@ -55,7 +55,7 @@ interface SupplierTasksProps {
 }
 
 export const SupplierTasks: React.FC<SupplierTasksProps> = ({ employees }) => {
-  const { activeOrg, preferredCurrency } = useAuth();
+  const { activeOrg, preferredCurrency, user } = useAuth();
   
   const [tasks, setTasks] = useState<Task[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
@@ -419,6 +419,48 @@ export const SupplierTasks: React.FC<SupplierTasksProps> = ({ employees }) => {
         items: updatedItems,
         updatedAt: serverTimestamp()
       });
+
+      // Automatically create Vendor Liability Ledger entry if task is on Credit
+      if (reviewTask.paymentStatus === "Credit" && updatedItems && activeOrg) {
+        // Group items by vendorId to support multi-vendor credit entries
+        const vendorTotals: Record<string, { vendorName: string; total: number }> = {};
+        
+        updatedItems.forEach(item => {
+          if (!item.vendorId) return;
+          const qty = item.purchasedQuantity ?? item.quantity ?? 0;
+          const cost = item.purchaseCost ?? 0;
+          const lineAmt = qty * cost;
+          
+          if (lineAmt > 0) {
+            if (!vendorTotals[item.vendorId]) {
+              vendorTotals[item.vendorId] = {
+                vendorName: item.vendorName || "Unknown Vendor",
+                total: 0
+              };
+            }
+            vendorTotals[item.vendorId].total += lineAmt;
+          }
+        });
+
+        for (const [vId, info] of Object.entries(vendorTotals)) {
+          await addDoc(collection(db, "vendor_payment_ledger"), {
+            organizationId: activeOrg.id,
+            vendorId: vId,
+            vendorName: info.vendorName,
+            transactionType: VendorTransactionType.PROCUREMENT_CREDIT,
+            amount: info.total,
+            status: SettlementStatus.OUTSTANDING,
+            remainingAmount: info.total,
+            referenceType: "procurement",
+            referenceId: reviewTask.id,
+            referenceNumber: `PRC-${reviewTask.id.slice(-6).toUpperCase()}`,
+            notes: `Liability recorded from approved procurement mission #${reviewTask.id.slice(-6).toUpperCase()}`,
+            createdBy: user?.name || user?.email || "Supplier Owner",
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+          });
+        }
+      }
 
       toast.success("Procurement approved. Pending Stock Intake.");
       setIsReviewOpen(false);

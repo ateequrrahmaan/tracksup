@@ -9,10 +9,11 @@ import {
   doc, 
   updateDoc, 
   serverTimestamp, 
+  getDocs,
   Timestamp 
 } from "firebase/firestore";
 import { useAuth } from "@/lib/auth-context";
-import { Product, Vendor, Task } from "@/types";
+import { Product, Vendor, Task, VendorPaymentLedger, SettlementStatus, VendorTransactionType } from "@/types";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,19 +41,26 @@ import {
   Trash2,
   ListPlus,
   Coins,
-  History
+  History,
+  Wallet,
+  Calendar,
+  CheckCircle,
+  Clock,
+  Activity
 } from "lucide-react";
 
 export const SupplierVendors: React.FC = () => {
-  const { activeOrg, preferredCurrency } = useAuth();
+  const { activeOrg, preferredCurrency, user } = useAuth();
   
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [ledger, setLedger] = useState<VendorPaymentLedger[]>([]);
   const [loading, setLoading] = useState(true);
   
   // Navigation & Detail States
   const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
+  const [activeTab, setActiveTab] = useState<"overview" | "history" | "ledger" | "products">("overview");
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState<"all" | "active" | "archived">("all");
   
@@ -60,6 +68,7 @@ export const SupplierVendors: React.FC = () => {
   const [isNewVendorOpen, setIsNewVendorOpen] = useState(false);
   const [isEditVendorOpen, setIsEditVendorOpen] = useState(false);
   const [isProductMapOpen, setIsProductMapOpen] = useState(false);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   
   // Form States
   const [vendorName, setVendorName] = useState("");
@@ -68,6 +77,13 @@ export const SupplierVendors: React.FC = () => {
   const [notes, setNotes] = useState("");
   const [mappingProductIds, setMappingProductIds] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
+
+  // Payment Recording States
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState<"Cash" | "Bank Transfer" | "UPI" | "Cheque" | "Other">("Cash");
+  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split("T")[0]);
+  const [paymentNotes, setPaymentNotes] = useState("");
+  const [processingPayment, setProcessingPayment] = useState(false);
 
   // Load real-time data
   useEffect(() => {
@@ -115,10 +131,23 @@ export const SupplierVendors: React.FC = () => {
       console.error("Tasks subscription error:", err);
     });
 
+    // Subscribe to Vendor Payment Ledger
+    const ledgerQuery = query(
+      collection(db, "vendor_payment_ledger"),
+      where("organizationId", "==", activeOrg.id)
+    );
+    const unsubscribeLedger = onSnapshot(ledgerQuery, (snapshot) => {
+      const lList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as VendorPaymentLedger));
+      setLedger(lList);
+    }, (err) => {
+      console.error("Ledger subscription error:", err);
+    });
+
     return () => {
       unsubscribeVendors();
       unsubscribeProducts();
       unsubscribeTasks();
+      unsubscribeLedger();
     };
   }, [activeOrg]);
 
@@ -270,6 +299,108 @@ export const SupplierVendors: React.FC = () => {
     );
   };
 
+  // Record Vendor Payment (FIFO matching settlement logic)
+  const handleRecordPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeOrg || !selectedVendor) return;
+    
+    const amountNum = parseFloat(paymentAmount);
+    if (isNaN(amountNum) || amountNum <= 0) {
+      toast.error("Please enter a valid positive payment amount.");
+      return;
+    }
+
+    if (amountNum > (vendorExtendedData?.outstandingBalance || 0)) {
+      toast.warning(`Payment amount exceeds total outstanding balance. Maximum due is ${formatCurrency(vendorExtendedData?.outstandingBalance || 0, preferredCurrency)}.`);
+      return;
+    }
+
+    setProcessingPayment(true);
+    try {
+      // Fetch outstanding / partially settled credit entries for FIFO deduction
+      const ledgerColRef = collection(db, "vendor_payment_ledger");
+      const creditsQuery = query(
+        ledgerColRef,
+        where("vendorId", "==", selectedVendor.id),
+        where("transactionType", "==", "Procurement Credit"),
+        where("status", "in", ["Outstanding", "Partially Settled"])
+      );
+      
+      const creditsSnap = await getDocs(creditsQuery);
+      
+      // Sort by createdAt ascending in-memory
+      const creditDocs = creditsSnap.docs.map(doc => ({
+        id: doc.id,
+        ref: doc.ref,
+        ...doc.data()
+      } as any)).sort((a, b) => {
+        const secondsA = a.createdAt?.seconds || 0;
+        const secondsB = b.createdAt?.seconds || 0;
+        return secondsA - secondsB;
+      });
+
+      let remainingPayment = amountNum;
+      const updates = [];
+
+      for (const credit of creditDocs) {
+        if (remainingPayment <= 0) break;
+
+        const currentRemaining = credit.remainingAmount !== undefined ? credit.remainingAmount : credit.amount;
+
+        if (remainingPayment >= currentRemaining) {
+          remainingPayment -= currentRemaining;
+          updates.push(updateDoc(credit.ref, {
+            remainingAmount: 0,
+            status: "Settled",
+            updatedAt: serverTimestamp()
+          }));
+        } else {
+          const newRemaining = currentRemaining - remainingPayment;
+          remainingPayment = 0;
+          updates.push(updateDoc(credit.ref, {
+            remainingAmount: parseFloat(newRemaining.toFixed(2)),
+            status: "Partially Settled",
+            updatedAt: serverTimestamp()
+          }));
+        }
+      }
+
+      // Write master Vendor Payment entry
+      await addDoc(collection(db, "vendor_payment_ledger"), {
+        organizationId: activeOrg.id,
+        vendorId: selectedVendor.id,
+        vendorName: selectedVendor.vendorName,
+        transactionType: "Vendor Payment",
+        amount: amountNum,
+        status: "Completed",
+        referenceType: "payment",
+        referenceNumber: `PAY-${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
+        notes: paymentNotes.trim() || `Recorded vendor payment via ${paymentMethod}`,
+        createdBy: user?.name || user?.email || "Supplier Owner",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+
+      // Bulk resolve credits
+      if (updates.length > 0) {
+        await Promise.all(updates);
+      }
+
+      toast.success(`Recorded settlement of ${formatCurrency(amountNum, preferredCurrency)} successfully!`);
+      
+      // Reset payment variables
+      setPaymentAmount("");
+      setPaymentNotes("");
+      setPaymentMethod("Cash");
+      setIsPaymentModalOpen(false);
+    } catch (err) {
+      console.error("Recording payment failed:", err);
+      toast.error("Failed to record vendor payment. Please verify permissions.");
+    } finally {
+      setProcessingPayment(false);
+    }
+  };
+
   const resetForm = () => {
     setVendorName("");
     setPhone("");
@@ -282,19 +413,23 @@ export const SupplierVendors: React.FC = () => {
   const vendorExtendedData = useMemo(() => {
     if (!selectedVendor) return null;
 
-    // Filter procurement tasks for this vendor
-    const vTasks = tasks.filter(t => t.vendorId === selectedVendor.id);
+    // Filter procurement tasks for this vendor (single or multi-vendor)
+    const vTasks = tasks.filter(t => 
+      t.vendorId === selectedVendor.id || 
+      (t.vendorId === "multi" && t.items?.some(item => item.vendorId === selectedVendor.id))
+    );
     
     // Total Purchases Value (Approved & Stock Added ones)
-    // The cost is calculated from actual purchased quantity times purchase cost
     const completedOrApprovedTasks = vTasks.filter(t => ["awaiting_approval", "approved", "stock_added"].includes(t.status));
     
     let totalSpent = 0;
     completedOrApprovedTasks.forEach(task => {
       task.items?.forEach(item => {
-        const qty = item.purchasedQuantity ?? item.quantity;
-        const cost = item.purchaseCost ?? 0;
-        totalSpent += qty * cost;
+        if (task.vendorId !== "multi" || item.vendorId === selectedVendor.id) {
+          const qty = item.purchasedQuantity ?? item.quantity ?? 0;
+          const cost = item.purchaseCost ?? 0;
+          totalSpent += qty * cost;
+        }
       });
     });
 
@@ -302,13 +437,20 @@ export const SupplierVendors: React.FC = () => {
     const historyList = completedOrApprovedTasks
       .map(task => {
         let taskTotal = 0;
-        const itemsBreakdown = task.items?.map(item => {
-          const qty = item.purchasedQuantity ?? item.quantity;
+        const filteredItems = task.items?.filter(item => task.vendorId !== "multi" || item.vendorId === selectedVendor.id) || [];
+        
+        const itemsBreakdown = filteredItems.map(item => {
+          const qty = item.purchasedQuantity ?? item.quantity ?? 0;
           const uCost = item.purchaseCost ?? 0;
           const lineTotal = qty * uCost;
           taskTotal += lineTotal;
           return `${item.productName} (${qty} x ${formatCurrency(uCost, preferredCurrency)})`;
         }).join(", ") || "No item log";
+
+        // Find matching ledger credit entry to get its Settlement Status
+        const matchingLedger = ledger.find(l => l.referenceId === task.id && l.vendorId === selectedVendor.id && l.transactionType === "Procurement Credit");
+        const settlementStatus = task.paymentStatus === "Paid" ? "Settled" : (matchingLedger?.status || "Outstanding");
+        const remainingAmt = task.paymentStatus === "Paid" ? 0 : (matchingLedger?.remainingAmount ?? taskTotal);
 
         return {
           id: task.id,
@@ -316,18 +458,45 @@ export const SupplierVendors: React.FC = () => {
           status: task.status,
           date: task.updatedAt ? (task.updatedAt.toDate ? task.updatedAt.toDate().toLocaleDateString() : new Date(task.updatedAt as any).toLocaleDateString()) : "N/A",
           total: taskTotal,
-          items: itemsBreakdown
+          items: itemsBreakdown,
+          paymentStatus: task.paymentStatus || "Paid",
+          settlementStatus,
+          remainingAmt
         };
       })
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
+    // Calculate details from real-time ledger
+    const vLedger = ledger
+      .filter(l => l.vendorId === selectedVendor.id)
+      .sort((a, b) => {
+        const tA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : (a.createdAt ? new Date(a.createdAt as any).getTime() : 0);
+        const tB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : (b.createdAt ? new Date(b.createdAt as any).getTime() : 0);
+        return tB - tA; // descending chronological
+      });
+
+    const totalPaid = vLedger
+      .filter(l => l.transactionType === "Vendor Payment")
+      .reduce((sum, l) => sum + (l.amount || 0), 0);
+
+    const outstandingBalance = vLedger
+      .filter(l => l.transactionType === "Procurement Credit")
+      .reduce((sum, l) => sum + (l.remainingAmount ?? l.amount ?? 0), 0);
+
+    const creditPurchasesCount = vLedger
+      .filter(l => l.transactionType === "Procurement Credit").length;
+
     return {
       history: historyList,
-      totalSpent,
+      totalSpent, // Total Sourced Purchases Value
+      totalPaid, // Total Settlement Recorded
+      outstandingBalance, // Outstanding Dues
+      creditPurchasesCount, // Outstanding count of credit entries
       itemsCompletedCount: completedOrApprovedTasks.length,
+      vLedger,
       recentTasks: vTasks.slice(0, 5)
     };
-  }, [selectedVendor, tasks, preferredCurrency]);
+  }, [selectedVendor, tasks, ledger, preferredCurrency]);
 
   return (
     <div className="space-y-8 max-w-6xl mx-auto px-4 md:px-6">
@@ -442,82 +611,368 @@ export const SupplierVendors: React.FC = () => {
             {/* Vendor Performance & History dashboard */}
             <div className="flex-1 space-y-6">
               {/* Stats blocks overlay */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Card className="rounded-3xl border-none shadow-sm bg-white p-6 flex items-center gap-4">
-                  <div className="h-12 w-12 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600">
-                    <Coins className="h-6 w-6" />
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <Card className="rounded-2xl border-none shadow-sm bg-white p-5 flex items-center gap-4">
+                  <div className={`h-11 w-11 rounded-2xl flex items-center justify-center shrink-0 ${
+                    (vendorExtendedData?.outstandingBalance ?? 0) > 0 ? "bg-rose-50 text-rose-600 animate-pulse" : "bg-zinc-50 text-zinc-400"
+                  }`}>
+                    <Wallet className="h-5 w-5" />
                   </div>
                   <div>
-                    <p className="text-[8px] font-black uppercase text-zinc-400 tracking-wider">Total Procurement Value</p>
-                    <p className="text-2xl font-black italic tracking-tighter text-zinc-950 mt-0.5">
-                      {formatCurrency(vendorExtendedData?.totalSpent || 0, preferredCurrency)}
+                    <p className="text-[8px] font-black uppercase text-zinc-400 tracking-wider leading-none mb-1">Outstanding Balance</p>
+                    <p className={`text-lg font-black italic tracking-tighter leading-none ${
+                      (vendorExtendedData?.outstandingBalance ?? 0) > 0 ? "text-rose-600" : "text-zinc-600"
+                    }`}>
+                      {formatCurrency(vendorExtendedData?.outstandingBalance ?? 0, preferredCurrency)}
                     </p>
                   </div>
                 </Card>
-                <Card className="rounded-3xl border-none shadow-sm bg-white p-6 flex items-center gap-4">
-                  <div className="h-12 w-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600">
-                    <History className="h-6 w-6" />
+
+                <Card className="rounded-2xl border-none shadow-sm bg-white p-5 flex items-center gap-4">
+                  <div className="h-11 w-11 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600 shrink-0">
+                    <Coins className="h-5 w-5" />
                   </div>
                   <div>
-                    <p className="text-[8px] font-black uppercase text-zinc-400 tracking-wider">Completed Purchases</p>
-                    <p className="text-2xl font-black italic tracking-tighter text-zinc-950 mt-0.5">
-                      {vendorExtendedData?.itemsCompletedCount || 0} Runs
+                    <p className="text-[8px] font-black uppercase text-zinc-400 tracking-wider leading-none mb-1">Total Settled Paid</p>
+                    <p className="text-lg font-black italic tracking-tighter text-emerald-600 leading-none">
+                      {formatCurrency(vendorExtendedData?.totalPaid ?? 0, preferredCurrency)}
+                    </p>
+                  </div>
+                </Card>
+
+                <Card className="rounded-2xl border-none shadow-sm bg-white p-5 flex items-center gap-4">
+                  <div className="h-11 w-11 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 shrink-0">
+                    <History className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-[8px] font-black uppercase text-zinc-400 tracking-wider leading-none mb-1">Credit Purchases</p>
+                    <p className="text-lg font-black italic tracking-tighter text-indigo-600 leading-none">
+                      {vendorExtendedData?.creditPurchasesCount ?? 0} Runs
                     </p>
                   </div>
                 </Card>
               </div>
 
-              {/* Procurement History list */}
-              <Card className="rounded-[2.2rem] border-none shadow-sm bg-white overflow-hidden">
-                <CardHeader className="pb-4">
-                  <CardTitle className="text-base font-black uppercase italic tracking-tight">Procurement Ledger History</CardTitle>
-                  <CardDescription className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wide">Financial records log</CardDescription>
-                </CardHeader>
-                <CardContent className="px-0 pb-0">
-                  {vendorExtendedData && vendorExtendedData.history.length > 0 ? (
-                    <Table>
-                      <TableHeader className="bg-zinc-50">
-                        <TableRow>
-                          <TableHead className="text-[9px] font-black uppercase tracking-wider pl-6">Run Info / Date</TableHead>
-                          <TableHead className="text-[9px] font-black uppercase tracking-wider">Supplied Contents</TableHead>
-                          <TableHead className="text-[9px] font-black uppercase tracking-wider text-right pr-6">Cost Value</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {vendorExtendedData.history.map(item => (
-                          <TableRow key={item.id} className="hover:bg-zinc-50 transition-colors">
-                            <TableCell className="pl-6 py-4">
-                              <p className="text-xs font-black text-zinc-900 uppercase italic">
-                                Run #{item.id.slice(-6).toUpperCase()}
-                              </p>
-                              <p className="text-[10px] text-zinc-400 font-bold">{item.date}</p>
-                            </TableCell>
-                            <TableCell className="py-4">
-                              <p className="text-xs text-zinc-600 font-semibold line-clamp-1">{item.items}</p>
-                              <Badge className="text-[8px] font-black uppercase tracking-wider mt-1 rounded-md" variant="success">
-                                {item.status.replace(/_/g, ' ')}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-right pr-6 py-4">
-                              <span className="text-sm font-black italic tracking-tight">
-                                {formatCurrency(item.total, preferredCurrency)}
-                              </span>
-                            </TableCell>
+              {/* Repayment Settlement prompt bar */}
+              {(vendorExtendedData?.outstandingBalance ?? 0) > 0 && (
+                <Card className="rounded-[2rem] border-none bg-zinc-900 text-white p-6 shadow-md flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <div>
+                    <h4 className="text-sm font-black uppercase italic tracking-tight">Credit Settlement Pending</h4>
+                    <p className="text-[9px] uppercase font-bold text-zinc-400 tracking-wider mt-1">
+                      Dues outstanding: {formatCurrency(vendorExtendedData?.outstandingBalance ?? 0, preferredCurrency)} are eligible for FIFO clearance.
+                    </p>
+                  </div>
+                  <Button 
+                    onClick={() => setIsPaymentModalOpen(true)}
+                    className="rounded-xl h-11 bg-white hover:bg-zinc-100 text-zinc-900 font-extrabold uppercase text-[10px] tracking-wider px-6 shadow-xl shrink-0"
+                  >
+                    <Wallet className="mr-2 h-4 w-4" /> Record Vendor Payment
+                  </Button>
+                </Card>
+              )}
+
+              {/* Master Tab Bar Section */}
+              <div className="flex border-b border-zinc-100 pb-2 overflow-x-auto scrollbar-none gap-2">
+                {[
+                  { id: "overview", label: "Statement Hub" },
+                  { id: "history", label: "Procurement History" },
+                  { id: "ledger", label: "Payment Ledger" },
+                  { id: "products", label: "Products" }
+                ].map(t => (
+                  <button
+                    key={t.id}
+                    onClick={() => setActiveTab(t.id as any)}
+                    className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap ${
+                      activeTab === t.id 
+                        ? "bg-zinc-900 text-white shadow-sm" 
+                        : "text-zinc-500 hover:text-zinc-900 bg-zinc-50 hover:bg-zinc-100"
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Tab Outputs rendering switcher */}
+              {activeTab === "overview" && (
+                <div className="space-y-6">
+                  {/* Vendor Statement View Card */}
+                  <Card className="rounded-[2.2rem] border-none shadow-sm bg-white overflow-hidden">
+                    <CardHeader className="bg-zinc-50 border-b border-zinc-100 p-8">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="text-[8px] font-black uppercase text-zinc-400 tracking-[0.2em] leading-none mb-1">Company Record</p>
+                          <h3 className="text-base font-black uppercase italic tracking-tight">{activeOrg?.name || "Tracksup Network"}</h3>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[8px] font-black uppercase text-zinc-400 tracking-[0.2em] leading-none mb-1">Statement Date</p>
+                          <p className="text-xs font-black text-zinc-900 italic">{new Date().toLocaleDateString()}</p>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="p-8 space-y-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pb-6 border-b border-dashed border-zinc-100">
+                        <div>
+                          <p className="text-[9px] font-black uppercase text-zinc-400 tracking-wider mb-2">Vendor Particulars</p>
+                          <h4 className="text-sm font-black text-zinc-900 uppercase leading-tight">{selectedVendor.vendorName}</h4>
+                          {selectedVendor.phone && <p className="text-xs text-zinc-500 mt-1">Phone: {selectedVendor.phone}</p>}
+                          {selectedVendor.address && <p className="text-xs text-zinc-550 mt-0.5">Address: {selectedVendor.address}</p>}
+                          <p className="text-[10px] text-zinc-400 font-bold uppercase mt-2">Status: <b className="text-emerald-600">{selectedVendor.status}</b></p>
+                        </div>
+                        <div className="space-y-2 text-right">
+                          <p className="text-[9px] font-black uppercase text-zinc-400 tracking-wider mb-2 text-left md:text-right">Statement Summary</p>
+                          <div className="flex justify-between text-xs font-semibold">
+                            <span className="text-zinc-500">Total Sourced Volume:</span>
+                            <span className="text-zinc-900 font-bold">{formatCurrency(vendorExtendedData?.totalSpent ?? 0, preferredCurrency)}</span>
+                          </div>
+                          <div className="flex justify-between text-xs font-semibold">
+                            <span className="text-zinc-500">Settlements Registered:</span>
+                            <span className="text-emerald-600 font-bold">-{formatCurrency(vendorExtendedData?.totalPaid ?? 0, preferredCurrency)}</span>
+                          </div>
+                          <div className="flex justify-between text-sm font-black pt-2 border-t border-zinc-150">
+                            <span className="text-zinc-900">Total Account Balance:</span>
+                            <span className={(vendorExtendedData?.outstandingBalance ?? 0) > 0 ? "text-rose-600" : "text-zinc-800"}>
+                              {formatCurrency(vendorExtendedData?.outstandingBalance ?? 0, preferredCurrency)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Transaction Timeline view */}
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-2">
+                          <Activity className="h-4 w-4 text-zinc-500" />
+                          <h4 className="text-xs font-black uppercase tracking-wider text-zinc-850">Settlement Timeline Feed</h4>
+                        </div>
+                        
+                        {vendorExtendedData && vendorExtendedData.vLedger.length > 0 ? (
+                          <div className="relative pl-6 border-l border-zinc-200 ml-3 space-y-6 pt-2">
+                            {vendorExtendedData.vLedger.slice(0, 5).map((l, idx) => {
+                              const isPayment = l.transactionType === "Vendor Payment";
+                              const dateStr = l.createdAt ? (l.createdAt.toDate ? l.createdAt.toDate().toLocaleDateString() : new Date(l.createdAt).toLocaleDateString()) : "N/A";
+                              return (
+                                <div key={l.id || idx} className="relative group">
+                                  {/* Dot indicator */}
+                                  <div className={`absolute -left-[30px] top-1 h-3 w-3 rounded-full border-2 bg-white transition-transform group-hover:scale-125 ${
+                                    isPayment ? "border-emerald-500" : "border-rose-400"
+                                  }`} />
+                                  
+                                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-1">
+                                    <div>
+                                      <p className="text-xs font-black uppercase italic tracking-tight text-zinc-800">
+                                        {l.referenceNumber ? `${l.referenceNumber}: ` : ""}{l.transactionType}
+                                      </p>
+                                      <p className="text-[10px] text-zinc-500 font-bold leading-relaxed">{l.notes}</p>
+                                    </div>
+                                    <div className="text-left sm:text-right shrink-0">
+                                      <p className={`text-xs font-black italic ${isPayment ? "text-emerald-600" : "text-rose-600"}`}>
+                                        {isPayment ? "-" : "+"}{formatCurrency(l.amount, preferredCurrency)}
+                                      </p>
+                                      <p className="text-[8px] text-zinc-400 font-extrabold uppercase">{dateStr}</p>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div className="bg-zinc-50 rounded-2xl p-6 text-center text-zinc-450 text-[10px] uppercase font-bold tracking-wider">
+                            Timeline feed is currently blank. Credit purchases will compile automatically.
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+
+              {activeTab === "history" && (
+                <Card className="rounded-[2.2rem] border-none shadow-sm bg-white overflow-hidden">
+                  <CardHeader className="pb-4">
+                    <CardTitle className="text-sm font-black uppercase italic tracking-tight">Procurement History Table</CardTitle>
+                    <CardDescription className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wide">Historical Run Invoices and aging logs</CardDescription>
+                  </CardHeader>
+                  <CardContent className="px-0 pb-0">
+                    {vendorExtendedData && vendorExtendedData.history.length > 0 ? (
+                      <Table>
+                        <TableHeader className="bg-zinc-50/75 border-b border-zinc-100">
+                          <TableRow>
+                            <TableHead className="text-[9px] font-black uppercase tracking-wider pl-6">Run Info / Date</TableHead>
+                            <TableHead className="text-[9px] font-black uppercase tracking-wider">Supplied Contents</TableHead>
+                            <TableHead className="text-[9px] font-black uppercase tracking-wider text-center">Settlement Status</TableHead>
+                            <TableHead className="text-[9px] font-black uppercase tracking-wider text-right pr-6">Cost Value</TableHead>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  ) : (
-                    <div className="text-center py-16 text-zinc-400 bg-zinc-50/50">
-                      <FileText className="h-10 w-10 mx-auto mb-3 opacity-50" />
-                      <p className="text-xs font-black uppercase tracking-widest text-zinc-405">Zero Historical Procurement Records</p>
-                      <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-wide mt-1 max-w-xs mx-auto">
-                        Once an Employee purchases from this vendor and it receives approval, logs will record here.
-                      </p>
+                        </TableHeader>
+                        <TableBody>
+                          {vendorExtendedData.history.map(item => (
+                            <TableRow key={item.id} className="hover:bg-zinc-50 transition-colors">
+                              <TableCell className="pl-6 py-4">
+                                <p className="text-xs font-black text-zinc-900 uppercase italic">
+                                  Run #{item.id.slice(-6).toUpperCase()}
+                                </p>
+                                <p className="text-[9px] text-zinc-400 font-bold">{item.date}</p>
+                              </TableCell>
+                              <TableCell className="py-4">
+                                <p className="text-xs text-zinc-650 font-semibold line-clamp-1">{item.items}</p>
+                                <div className="flex gap-2 items-center mt-1">
+                                  <Badge className="text-[7px] font-black uppercase tracking-wider rounded-md py-0 px-2" variant="outline">
+                                    {item.status.replace(/_/g, ' ')}
+                                  </Badge>
+                                  <Badge className="text-[7px] font-black uppercase tracking-wider rounded-md py-0 px-2">
+                                    Terms: {item.paymentStatus}
+                                  </Badge>
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-center py-4">
+                                <Badge 
+                                  variant={
+                                    item.settlementStatus === "Settled" 
+                                      ? "success" 
+                                      : (item.settlementStatus === "Partially Settled" ? "warning" : "destructive")
+                                  }
+                                  className="text-[8px] font-black uppercase tracking-wider py-0.5 rounded-md"
+                                >
+                                  {item.settlementStatus}
+                                </Badge>
+                                {item.settlementStatus === "Partially Settled" && (
+                                  <p className="text-[8px] font-black text-rose-500 mt-1 leading-none">
+                                    Due: {formatCurrency(item.remainingAmt, preferredCurrency)}
+                                  </p>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-right pr-6 py-4">
+                                <span className="text-sm font-black italic tracking-tight">
+                                  {formatCurrency(item.total, preferredCurrency)}
+                                </span>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    ) : (
+                      <div className="text-center py-16 text-zinc-400">
+                        <FileText className="h-10 w-10 mx-auto mb-3 opacity-50" />
+                        <p className="text-xs font-black uppercase tracking-widest leading-none">Zero Procurement Records</p>
+                        <p className="text-[10px] text-zinc-404 mt-2 max-w-xs mx-auto">Once an employee initiates and completes a procurement task with credit terms, it records here.</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+              {activeTab === "ledger" && (
+                <Card className="rounded-[2.2rem] border-none shadow-sm bg-white overflow-hidden">
+                  <CardHeader className="pb-4">
+                    <CardTitle className="text-sm font-black uppercase italic tracking-tight">Account Settlement Ledger</CardTitle>
+                    <CardDescription className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wide">Unified collection of credits, settlements and adjustment history</CardDescription>
+                  </CardHeader>
+                  <CardContent className="px-0 pb-0 shadow-none">
+                    {vendorExtendedData && vendorExtendedData.vLedger.length > 0 ? (
+                      <Table>
+                        <TableHeader className="bg-zinc-50 border-b border-zinc-150">
+                          <TableRow>
+                            <TableHead className="text-[9px] font-black uppercase tracking-wider pl-6">Posting Date</TableHead>
+                            <TableHead className="text-[9px] font-black uppercase tracking-wider">Type / Ref No</TableHead>
+                            <TableHead className="text-[9px] font-black uppercase tracking-wider">Status</TableHead>
+                            <TableHead className="text-[9px] font-black uppercase tracking-wider">Operational Notes</TableHead>
+                            <TableHead className="text-[9px] font-black uppercase tracking-wider text-right pr-6">Value Posting</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {vendorExtendedData.vLedger.map((l, idx) => {
+                            const dateForm = l.createdAt ? (l.createdAt.toDate ? l.createdAt.toDate().toLocaleDateString() : new Date(l.createdAt).toLocaleDateString()) : "N/A";
+                            const isPayment = l.transactionType === "Vendor Payment";
+                            return (
+                              <TableRow key={l.id || idx} className="hover:bg-zinc-50 transition-colors">
+                                <TableCell className="pl-6 py-4">
+                                  <div className="flex items-center gap-2">
+                                    <Calendar className="h-3.5 w-3.5 text-zinc-400" />
+                                    <span className="text-xs font-semibold text-zinc-900">{dateForm}</span>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="py-4">
+                                  <p className="text-xs font-black uppercase italic tracking-tight text-zinc-900 leading-none mb-1">{l.transactionType}</p>
+                                  <p className="text-[9px] font-bold text-zinc-450 uppercase leading-none">{l.referenceNumber || "PRC-CREDIT"}</p>
+                                </TableCell>
+                                <TableCell className="py-4">
+                                  <Badge 
+                                    className="text-[8px] font-black uppercase py-0.5 rounded-md"
+                                    variant={
+                                      l.status === "Completed" || l.status === "Settled" 
+                                        ? "success" 
+                                        : (l.status === "Partially Settled" ? "warning" : "destructive")
+                                    }
+                                  >
+                                    {l.status}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="py-4 text-xs font-medium text-zinc-600 max-w-[160px] truncate">
+                                  {l.notes || "--"}
+                                </TableCell>
+                                <TableCell className="text-right pr-6 py-4">
+                                  <span className={`text-xs font-black italic tracking-wide ${isPayment ? "text-emerald-600 animate-fade-in" : "text-rose-600"}`}>
+                                    {isPayment ? "-" : "+"}{formatCurrency(l.amount, preferredCurrency)}
+                                  </span>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    ) : (
+                      <div className="text-center py-16 text-zinc-400 bg-zinc-50/50">
+                        <Activity className="h-10 w-10 mx-auto mb-3 opacity-50" />
+                        <p className="text-xs font-black uppercase tracking-widest text-zinc-400">Ledger account is entirely clear</p>
+                        <p className="text-[10px] text-zinc-404 font-bold mt-1 uppercase max-w-xs mx-auto">Procurement liabilities and payments post in real-time.</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+              {activeTab === "products" && (
+                <Card className="rounded-[2.2rem] border-none shadow-sm bg-white overflow-hidden">
+                  <CardHeader className="pb-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle className="text-sm font-black uppercase italic tracking-tight">Sourced Catalog Mapping</CardTitle>
+                        <CardDescription className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wide">Identify align products in wholesale logistics</CardDescription>
+                      </div>
+                      <Button onClick={openProductMapping} className="rounded-xl text-[9px] font-black uppercase tracking-wider h-9">
+                        <ListPlus className="mr-1 h-3.5 w-3.5" /> Configure Alignments
+                      </Button>
                     </div>
-                  )}
-                </CardContent>
-              </Card>
+                  </CardHeader>
+                  <CardContent className="p-8">
+                    {selectedVendor.productIds && selectedVendor.productIds.length > 0 ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {products
+                          .filter(p => selectedVendor.productIds.includes(p.id))
+                          .map(p => (
+                            <div key={p.id} className="flex flex-col justify-between p-5 rounded-2xl bg-zinc-50 hover:bg-zinc-100/75 transition-all group border border-zinc-150">
+                              <div className="space-y-1">
+                                <p className="text-[8px] font-extrabold text-zinc-400 uppercase tracking-wider">Product ID: {p.id.slice(-6).toUpperCase()}</p>
+                                <h4 className="text-sm font-black uppercase text-zinc-800 tracking-tight">{p.name}</h4>
+                              </div>
+                              <div className="flex justify-between items-center pt-4 border-t border-zinc-150 mt-4">
+                                <span className="text-[9px] font-extrabold text-zinc-400 uppercase tracking-wider">Wholesales Valuation</span>
+                                <Badge variant="outline" className="text-[9px] font-extrabold uppercase py-0.5 px-2 bg-white">
+                                  {formatCurrency(p.price, p.currency || preferredCurrency)}
+                                </Badge>
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-12 text-zinc-400">
+                        <Package className="h-10 w-10 mx-auto mb-3 opacity-50" />
+                        <p className="text-xs font-black uppercase tracking-widest text-zinc-400">Product Mapping is blank</p>
+                        <p className="text-[10px] text-zinc-404 mt-1 font-semibold max-w-sm mx-auto">No products catalog linked. Click standard launcher configuration on upper margin to align brand assets.</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
             </div>
           </div>
         </div>
@@ -829,6 +1284,96 @@ export const SupplierVendors: React.FC = () => {
               Update Product Configurations
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Record Vendor Payment Dialog */}
+      <Dialog open={isPaymentModalOpen} onOpenChange={setIsPaymentModalOpen}>
+        <DialogContent className="rounded-[2.2rem] p-10 border-none shadow-2xl sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-black uppercase italic tracking-tighter text-zinc-900">Record Vendor Payment</DialogTitle>
+            <DialogDescription className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-400">
+              Post settlement payment posting to vendor ledger
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedVendor && (
+            <form onSubmit={handleRecordPayment} className="space-y-5 pt-4">
+              <div className="grid grid-cols-2 gap-4 bg-zinc-50 p-4 rounded-xl text-xs">
+                <div>
+                  <p className="text-[8px] font-black uppercase text-zinc-400">Selected Vendor</p>
+                  <p className="font-bold text-zinc-900 mt-0.5 max-w-[170px] truncate">{selectedVendor.vendorName}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[8px] font-black uppercase text-rose-450">Outstanding Due</p>
+                  <p className="font-black italic text-rose-600 mt-0.5">
+                    {formatCurrency(vendorExtendedData?.outstandingBalance ?? 0, preferredCurrency)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-[9px] uppercase font-black tracking-widest text-zinc-400">Repayment Amount ({preferredCurrency})</Label>
+                <Input 
+                  type="number"
+                  step="any"
+                  value={paymentAmount}
+                  onChange={e => setPaymentAmount(e.target.value)}
+                  placeholder="e.g. 1500"
+                  required
+                  className="h-12 rounded-xl bg-zinc-50 border-none px-4 text-xs font-semibold focus-visible:ring-1 focus-visible:ring-zinc-950"
+                />
+                <p className="text-[8px] text-zinc-400 italic">Enter amount to deduct from oldest outstanding credits first (FIFO format).</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-[9px] uppercase font-black tracking-widest text-zinc-400">Payment Date</Label>
+                  <Input 
+                    type="date"
+                    value={paymentDate}
+                    onChange={e => setPaymentDate(e.target.value)}
+                    required
+                    className="h-12 rounded-xl bg-zinc-50 border-none px-4 text-xs font-semibold focus-visible:ring-1 focus-visible:ring-zinc-950"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-[9px] uppercase font-black tracking-widest text-zinc-400">Payment Method</Label>
+                  <select 
+                    value={paymentMethod}
+                    onChange={e => setPaymentMethod(e.target.value as any)}
+                    className="w-full h-12 rounded-xl bg-zinc-50 border-none px-4 text-xs font-semibold focus-visible:ring-1 focus-visible:ring-zinc-950 focus:outline-none"
+                  >
+                    <option value="Cash">Cash</option>
+                    <option value="Bank Transfer">Bank Transfer</option>
+                    <option value="UPI">UPI</option>
+                    <option value="Cheque">Cheque</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-[9px] uppercase font-black tracking-widest text-zinc-400">Settlement Note / Reference</Label>
+                <Textarea 
+                  value={paymentNotes}
+                  onChange={e => setPaymentNotes(e.target.value)}
+                  placeholder="e.g. Bank transfer reference #BB92X10"
+                  className="rounded-xl bg-zinc-50 border-none px-4 py-3 text-xs font-semibold min-h-[60px] focus-visible:ring-1 focus-visible:ring-zinc-950"
+                />
+              </div>
+
+              <DialogFooter className="pt-2">
+                <Button 
+                  type="submit" 
+                  disabled={processingPayment}
+                  className="w-full h-14 rounded-2xl font-black uppercase tracking-widest text-[11px] bg-zinc-900 text-white shadow-lg"
+                >
+                  {processingPayment ? "Registering Posting..." : "Deeds Cleared & Post Payment"}
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
         </DialogContent>
       </Dialog>
     </div>
