@@ -1121,7 +1121,7 @@ export const SupplierInventory: React.FC = () => {
 
       {/* Product Details & Journey History Dialog */}
       <Dialog open={!!selectedHistoryProduct} onOpenChange={(open) => { if (!open) setSelectedHistoryProduct(null); }}>
-        <DialogContent className="rounded-[2.5rem] p-10 border-none shadow-2xl max-w-4xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="rounded-[2.5rem] p-6 sm:p-10 border-none shadow-2xl w-[95vw] sm:max-w-[90vw] md:max-w-4xl max-h-[85vh] overflow-y-auto">
           {selectedHistoryProduct && productStats && (
             <div className="space-y-8">
               
