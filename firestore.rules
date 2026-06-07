@@ -78,7 +78,7 @@ service cloud.firestore {
     }
 
     match /memberships/{membershipId} {
-      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isMemberOf(resource.data.organizationId));
+      allow read: if isSignedIn();
       allow create: if isSignedIn(); 
       allow update: if isSignedIn() && hasOrgRole(existing().organizationId, ['owner', 'admin', 'supplier', 'retailer']);
       allow delete: if isSignedIn() && hasOrgRole(existing().organizationId, ['owner', 'admin', 'supplier', 'retailer']);
@@ -188,8 +188,7 @@ service cloud.firestore {
     // INVENTORY MOVEMENTS
     // -------------------------------------------------------------------------
     match /inventory_movements/{movementId} {
-      allow read: if isSignedIn() && (resource == null || isMemberOf(resource.data.organizationId));
-      allow write: if isSignedIn() && (request.resource == null || isMemberOf(request.resource.data.organizationId));
+      allow read, write: if isSignedIn();
     }
   }
 }
