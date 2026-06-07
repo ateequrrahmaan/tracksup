@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   ClipboardList, 
   Clock, 
@@ -51,6 +52,15 @@ export const EmployeeTasks: React.FC = () => {
   const [purchaseCosts, setPurchaseCosts] = useState<Record<string, number>>({});
   const [employeeNotes, setEmployeeNotes] = useState("");
   const [submittingProcure, setSubmittingProcure] = useState(false);
+
+  // Item-level completion states
+  const [activeItemTask, setActiveItemTask] = useState<Task | null>(null);
+  const [activeCompletionItem, setActiveCompletionItem] = useState<any | null>(null);
+  const [isItemCompletionOpen, setIsItemCompletionOpen] = useState(false);
+  const [actualQty, setActualQty] = useState<number>(0);
+  const [unitCost, setUnitCost] = useState<number>(0);
+  const [paymentMethod, setPaymentMethod] = useState<"Paid" | "Credit">("Paid");
+  const [itemNotes, setItemNotes] = useState<string>("");
 
   // Load employee specific tasks
   useEffect(() => {
@@ -177,6 +187,71 @@ export const EmployeeTasks: React.FC = () => {
       toast.error("Procurement log write failed.");
     } finally {
       setSubmittingProcure(false);
+    }
+  };
+
+  // Open item-level completion modal
+  const openItemCompletionModal = (task: Task, item: any) => {
+    setActiveItemTask(task);
+    setActiveCompletionItem(item);
+    
+    // Autofill or retain current recorded values if they have touched it before
+    setActualQty(item.purchasedQuantity ?? item.quantity);
+    setUnitCost(item.purchaseCost ?? 0);
+    setPaymentMethod(item.paymentMethod ?? "Paid");
+    setItemNotes(item.notes ?? "");
+    
+    setIsItemCompletionOpen(true);
+  };
+
+  // Confirm item-level completion and write updates inline to Firestore
+  const handleConfirmItemCompletion = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeItemTask || !activeCompletionItem) return;
+
+    if (unitCost < 0) {
+      toast.error("Cost cannot be negative.");
+      return;
+    }
+
+    try {
+      // Create copy of the items list
+      const updatedItems = activeItemTask.items?.map(item => {
+        if (item.productId === activeCompletionItem.productId && item.vendorId === activeCompletionItem.vendorId) {
+          return {
+            ...item,
+            completed: true,
+            purchasedQuantity: actualQty,
+            purchaseCost: unitCost,
+            paymentMethod,
+            notes: itemNotes.trim()
+          };
+        }
+        return item;
+      }) || [];
+
+      // Determine task wide completion status by checking if all flatItems are completed!
+      const allDone = updatedItems.every(item => item.completed);
+      const newStatus = allDone ? "awaiting_approval" : "in_progress";
+
+      await updateDoc(doc(db, "tasks", activeItemTask.id), {
+        items: updatedItems,
+        status: newStatus,
+        updatedAt: serverTimestamp()
+      });
+
+      if (allDone) {
+        toast.success("Fantastic! All items have been sourced. Sourcing directive is now awaiting supplier review!");
+      } else {
+        toast.success(`Recorded purchase progress for ${activeCompletionItem.productName}.`);
+      }
+
+      setIsItemCompletionOpen(false);
+      setActiveItemTask(null);
+      setActiveCompletionItem(null);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to commit step record.");
     }
   };
 
@@ -367,21 +442,96 @@ export const EmployeeTasks: React.FC = () => {
 
                       {/* Procurement Item View */}
                       {!isChecklist && (
-                        <div className="bg-zinc-50 rounded-2xl p-4 border border-zinc-100 space-y-3.5">
-                          <div className="flex justify-between items-center border-b border-zinc-100 pb-2 text-[9px] uppercase font-black text-zinc-400">
-                            <span className="inline-flex items-center gap-1"><Building className="h-4 w-4" /> Vendor Target</span>
-                            <span className="text-zinc-800 font-extrabold italic">{task.vendorName}</span>
+                        <div className="space-y-4">
+                          {/* Sourcing tracker summary */}
+                          <div className="bg-zinc-100/50 p-3 rounded-2xl flex justify-between items-center text-[10px] uppercase font-black text-zinc-500">
+                            <span>Mission Progress</span>
+                            <span className="text-zinc-800">
+                              {task.items?.filter(item => item.completed).length || 0} / {task.items?.length || 0} Completed
+                            </span>
                           </div>
-                          <div className="space-y-1.5">
-                            {task.items?.map((pItem, idx) => (
-                              <div key={idx} className="flex justify-between items-center text-xs font-semibold text-zinc-700">
-                                <span>{pItem.productName}</span>
-                                <span className="text-zinc-500">
-                                  Requested Qty: <b>{pItem.quantity}</b>
-                                  {pItem.purchasedQuantity && ` | Actual Purchased: ${pItem.purchasedQuantity}`}
-                                </span>
-                              </div>
-                            ))}
+
+                          <div className="w-full bg-zinc-200 h-1 rounded-full overflow-hidden">
+                            <div 
+                              className="bg-zinc-900 h-full transition-all duration-300"
+                              style={{ 
+                                width: `${
+                                  task.items && task.items.length > 0 
+                                    ? (task.items.filter(i => i.completed).length / task.items.length) * 100 
+                                    : 0
+                                }%` 
+                              }}
+                            />
+                          </div>
+
+                          {/* Sourcing items list grouped by vendor */}
+                          <div className="space-y-3.5 pt-1 max-h-[220px] overflow-y-auto pr-1">
+                            {(() => {
+                              // Dynamically group items by vendor within the card
+                              const grouped: Record<string, { vendorName: string; items: any[] }> = {};
+                              task.items?.forEach(item => {
+                                if (!grouped[item.vendorId]) {
+                                  grouped[item.vendorId] = {
+                                    vendorName: item.vendorName,
+                                    items: []
+                                  };
+                                }
+                                grouped[item.vendorId].items.push(item);
+                              });
+
+                              return Object.entries(grouped).map(([vendorId, group]) => (
+                                <div key={vendorId} className="space-y-1.5">
+                                  <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wider text-zinc-500">
+                                    <Building className="h-3.5 w-3.5 text-zinc-400" />
+                                    <span>{group.vendorName}</span>
+                                  </div>
+
+                                  <div className="space-y-1">
+                                    {group.items.map((item, keyIdx) => {
+                                      const isTaskActive = task.status === "in_progress";
+                                      return (
+                                        <div
+                                          key={`${vendorId}-${item.productId}-${keyIdx}`}
+                                          onClick={() => {
+                                            if (isTaskActive) {
+                                              openItemCompletionModal(task, item);
+                                            } else {
+                                              toast.info("Please accept and start the procurement directive to log purchases.");
+                                            }
+                                          }}
+                                          className={`flex items-center gap-3 p-2.5 rounded-xl border select-none transition-all ${
+                                            isTaskActive ? "cursor-pointer hover:bg-zinc-100 hover:border-zinc-350 active:scale-[0.99]" : "opacity-80"
+                                          } ${item.completed ? "bg-zinc-100/50 border-transparent text-zinc-400" : "bg-white border-zinc-100 text-zinc-750"}`}
+                                        >
+                                          <div className={`h-5 w-5 rounded-md border flex items-center justify-center shrink-0 transition-colors ${
+                                            item.completed ? "bg-emerald-600 border-emerald-600 text-white" : "border-zinc-300 bg-white"
+                                          }`}>
+                                            {item.completed && <CheckCircle2 className="h-3 w-3" />}
+                                          </div>
+                                          
+                                          <div className="flex-1 min-w-0">
+                                            <p className={`text-xs font-black uppercase tracking-tight truncate ${item.completed ? "line-through text-zinc-400" : "text-zinc-800"}`}>
+                                              {item.productName}
+                                            </p>
+                                            <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-tighter">
+                                              {item.completed ? (
+                                                <span className="text-emerald-600 font-extrabold flex items-center gap-1">
+                                                  Got: {item.purchasedQuantity} @ {formatCurrency(item.purchaseCost ?? 0, preferredCurrency)} ({item.paymentMethod})
+                                                </span>
+                                              ) : (
+                                                <span>Target: {item.quantity} units</span>
+                                              )}
+                                            </p>
+                                          </div>
+                                          
+                                          <ChevronRight className="h-3.5 w-3.5 text-zinc-300 shrink-0" />
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              ));
+                            })()}
                           </div>
                         </div>
                       )}
@@ -407,10 +557,10 @@ export const EmployeeTasks: React.FC = () => {
 
                       {task.status === "accepted" && (
                         <Button 
-                          onClick={() => handleUpdateStatus(task.id, isChecklist ? "in_progress" : "purchased")}
+                          onClick={() => handleUpdateStatus(task.id, "in_progress")}
                           className="w-full rounded-2xl h-11 bg-blue-600 text-white hover:bg-blue-700 font-black uppercase text-[9px] tracking-widest shadow-lg"
                         >
-                          <Play className="mr-2 h-4 w-4" /> {isChecklist ? "Start Checklist steps" : "Accept & Commence Sourcing"}
+                          <Play className="mr-2 h-4 w-4" /> {isChecklist ? "Start Checklist steps" : "Start Sourcing Mission"}
                         </Button>
                       )}
 
@@ -428,13 +578,11 @@ export const EmployeeTasks: React.FC = () => {
                         </Button>
                       )}
 
-                      {task.status === "purchased" && !isChecklist && (
-                        <Button 
-                          onClick={() => openProcurementRecordForm(task)}
-                          className="w-full rounded-2xl h-11 bg-amber-600 text-white hover:bg-amber-700 font-black uppercase text-[9px] tracking-widest shadow-lg"
-                        >
-                          <FileEdit className="mr-2 h-4 w-4" /> Record Purchase & Costs
-                        </Button>
+                      {task.status === "in_progress" && !isChecklist && (
+                        <div className="w-full py-2.5 text-center text-zinc-650 text-[10px] font-black uppercase tracking-widest bg-zinc-100/50 rounded-xl border border-zinc-150 flex flex-col items-center justify-center gap-1 shadow-sm">
+                          <span className="flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5 text-indigo-500 animate-pulse" /> Sourcing Mission Active</span>
+                          <span className="text-[8px] text-zinc-400 font-bold uppercase">Tick products above to record purchase logs</span>
+                        </div>
                       )}
 
                       {/* Read only status labels */}
@@ -486,104 +634,103 @@ export const EmployeeTasks: React.FC = () => {
         </Card>
       )}
 
-      {/* Record Purchase Quantities and Costs Dialog */}
-      <Dialog open={isProcureFormOpen} onOpenChange={setIsProcureFormOpen}>
-        {activeProcureTask && (
-          <DialogContent className="rounded-[2.2rem] p-10 border-none shadow-2xl sm:max-w-[550px] max-h-[85vh] overflow-y-auto">
+      {/* Individual Item Sourcing Completion Dialog */}
+      <Dialog open={isItemCompletionOpen} onOpenChange={setIsItemCompletionOpen}>
+        {activeCompletionItem && (
+          <DialogContent className="rounded-[2.2rem] p-10 border-none shadow-2xl sm:max-w-[500px] max-h-[85vh] overflow-y-auto">
             <DialogHeader>
               <div className="flex items-center gap-3">
                 <div className="h-12 w-12 bg-zinc-900 rounded-2xl flex items-center justify-center text-white shrink-0">
                   <Coins className="h-6 w-6" />
                 </div>
                 <div>
-                  <DialogTitle className="text-2xl font-black uppercase italic tracking-tighter">Purchase Log Record</DialogTitle>
+                  <DialogTitle className="text-xl font-black uppercase italic tracking-tighter">Sourcing Log Record</DialogTitle>
                   <DialogDescription className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-400">
-                    Sourced from {activeProcureTask.vendorName}
+                    Sourced from {activeCompletionItem.vendorName}
                   </DialogDescription>
                 </div>
               </div>
             </DialogHeader>
 
-            <form onSubmit={handleSubmitProcurementRun} className="space-y-6 pt-4">
-              
-              <div className="space-y-4">
-                <p className="text-[10px] font-black uppercase tracking-wider text-zinc-400">Confirm purchased counts and actual unit invoice costs</p>
-                
-                <div className="space-y-3.5 max-h-[220px] overflow-y-auto pr-1">
-                  {activeProcureTask.items?.map((item) => (
-                    <div key={item.productId} className="bg-zinc-50 border border-zinc-100 p-4 rounded-xl flex flex-col gap-3">
-                      <div className="flex justify-between items-baseline">
-                        <Label className="text-xs font-black uppercase text-zinc-800">{item.productName}</Label>
-                        <span className="text-[10px] text-zinc-400 font-bold">Requested: {item.quantity} units</span>
-                      </div>
-                      
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1">
-                          <Label className="text-[8px] font-black uppercase tracking-wider text-zinc-400">Bought Quantity</Label>
-                          <Input 
-                            type="number"
-                            min={0}
-                            required
-                            value={purchasedQuantities[item.productId] ?? item.quantity}
-                            onChange={(e) => setPurchasedQuantities(prev => ({
-                              ...prev,
-                              [item.productId]: parseInt(e.target.value) || 0
-                            }))}
-                            className="h-10 text-xs font-semibold bg-white border-zinc-200"
-                          />
-                        </div>
+            <form onSubmit={handleConfirmItemCompletion} className="space-y-6 pt-4">
+              <div className="bg-zinc-50 border border-zinc-100 p-5 rounded-2.5xl space-y-4">
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[10px] font-black uppercase text-zinc-400">Selected Product</span>
+                  <span className="text-sm font-black uppercase text-zinc-800 tracking-tight">{activeCompletionItem.productName}</span>
+                  <span className="text-[9px] text-zinc-400 font-bold uppercase mt-1">Expected quantity: {activeCompletionItem.quantity} units</span>
+                </div>
 
-                        <div className="space-y-1">
-                          <Label className="text-[8px] font-black uppercase tracking-wider text-zinc-400">Unit Purchase Cost ({preferredCurrency})</Label>
-                          <Input 
-                            type="number"
-                            min={0}
-                            step="0.01"
-                            placeholder="e.g. 5.50"
-                            required
-                            value={purchaseCosts[item.productId] || ""}
-                            onChange={(e) => setPurchaseCosts(prev => ({
-                              ...prev,
-                              [item.productId]: parseFloat(e.target.value) || 0
-                            }))}
-                            className="h-10 text-xs font-semibold bg-white border-zinc-200"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                <div className="grid grid-cols-2 gap-3 pt-2 border-t border-zinc-200/50">
+                  <div className="space-y-1">
+                    <Label className="text-[9px] font-black uppercase text-zinc-400 tracking-wider">Actual Quantity</Label>
+                    <Input 
+                      type="number"
+                      min={0}
+                      required
+                      value={actualQty}
+                      onChange={(e) => setActualQty(parseInt(e.target.value) || 0)}
+                      className="h-11 text-xs font-semibold bg-white border-zinc-200 rounded-xl"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-[9px] font-black uppercase text-zinc-400 tracking-wider">Unit Cost ({preferredCurrency})</Label>
+                    <Input 
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      placeholder="0.00"
+                      required
+                      value={unitCost || ""}
+                      onChange={(e) => setUnitCost(parseFloat(e.target.value) || 0)}
+                      className="h-11 text-xs font-semibold bg-white border-zinc-200 rounded-xl"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5 pt-1">
+                  <Label className="text-[9px] font-black uppercase text-zinc-400 tracking-wider">Payment Method / Terms</Label>
+                  <Select value={paymentMethod} onValueChange={(val: any) => setPaymentMethod(val)}>
+                    <SelectTrigger className="h-11 border-zinc-200 bg-white rounded-xl text-xs font-semibold shadow-none">
+                      <SelectValue placeholder="Terms" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl border-none shadow-2xl p-2">
+                      <SelectItem value="Paid" className="font-semibold text-xs py-2 rounded-lg">Paid (Upfront)</SelectItem>
+                      <SelectItem value="Credit" className="font-semibold text-xs py-2 rounded-lg">Vendor Credit</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 
-              {/* Employee sourcing details notes */}
+              {/* Sourcing notes */}
               <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-wider text-zinc-400">Purchasing Notes / Sourcing memo</Label>
+                <Label className="text-[9px] font-black uppercase text-zinc-400 tracking-wider">Purchasing Notes / Sourcing memo</Label>
                 <Textarea 
-                  placeholder="e.g. Received discount from Kumar or Vendor had limited Pepsi stocks..."
-                  value={employeeNotes}
-                  onChange={(e) => setEmployeeNotes(e.target.value)}
-                  className="rounded-xl border-zinc-150 p-3.5 text-xs text-zinc-700 min-h-[70px]"
+                  placeholder="e.g. Received Kumar discount, Pepsi stocks limited..."
+                  value={itemNotes}
+                  onChange={(e) => setItemNotes(e.target.value)}
+                  className="rounded-xl border-zinc-150 p-3.5 text-xs text-zinc-750 min-h-[70px]"
                 />
               </div>
 
-              <DialogFooter className="pt-4 flex gap-3">
+              <DialogFooter className="pt-2 flex gap-3">
                 <Button 
                   type="button" 
                   variant="ghost" 
                   onClick={() => {
-                    setIsProcureFormOpen(false);
-                    setActiveProcureTask(null);
+                    setIsItemCompletionOpen(false);
+                    setActiveItemTask(null);
+                    setActiveCompletionItem(null);
                   }}
-                  className="h-14 rounded-2xl font-black uppercase text-[10px] tracking-widest flex-1 border border-zinc-200"
+                  className="rounded-xl font-black uppercase text-[10px] tracking-widest flex-1 border border-zinc-200 h-10"
                 >
-                  Discard Records
+                  Cancel
                 </Button>
                 <Button 
                   type="submit" 
-                  disabled={submittingProcure}
-                  className="h-14 rounded-2xl bg-zinc-900 text-white hover:bg-zinc-800 font-black uppercase text-[10px] tracking-widest px-6 flex-1 shadow-lg shadow-zinc-350"
+                  className="rounded-xl bg-zinc-900 text-white hover:bg-zinc-800 font-black uppercase text-[10px] tracking-widest px-6 flex-1 h-10 shadow-md"
                 >
-                  {submittingProcure ? "Submitting logs..." : "Confirm & Send to Review"}
+                  Save Item Logs
                 </Button>
               </DialogFooter>
             </form>

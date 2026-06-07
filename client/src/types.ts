@@ -111,11 +111,16 @@ export interface ProcurementItem {
   productId: string;
   productName: string;
   quantity: number; // supplier requested qty
+  vendorId: string;
+  vendorName: string;
+  completed?: boolean;
   purchasedQuantity?: number; // employee actual purchased qty
-  purchaseCost?: number; // employee actual purchase cost per unit
+  purchaseCost?: number; // employee actual purchase cost per unit (unit cost)
   sellingPrice?: number; // supplier approved selling price
   margin?: number; // calculated margin %
   warehouseLocation?: string; // future-ready warehouse location string
+  paymentMethod?: "Paid" | "Credit";
+  notes?: string;
 }
 
 export interface Task {

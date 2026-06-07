@@ -79,10 +79,16 @@ export const SupplierTasks: React.FC<SupplierTasksProps> = ({ employees }) => {
   // Checklist dynamic creation state
   const [rawChecklistItems, setRawChecklistItems] = useState<string[]>([""]);
 
-  // Procurement creation state
-  const [selectedVendorId, setSelectedVendorId] = useState("");
-  const [procurementItems, setProcurementItems] = useState<{ productId: string; quantity: number }[]>([
-    { productId: "", quantity: 1 }
+  // Procurement creation state (Multi-vendor block architecture)
+  interface ProcurementBlock {
+    vendorId: string;
+    items: {
+      productId: string;
+      quantity: number;
+    }[];
+  }
+  const [procurementBlocks, setProcurementBlocks] = useState<ProcurementBlock[]>([
+    { vendorId: "", items: [{ productId: "", quantity: 1 }] }
   ]);
   const [paymentStatus, setPaymentStatus] = useState<"Paid" | "Credit">("Paid");
 
@@ -148,13 +154,16 @@ export const SupplierTasks: React.FC<SupplierTasksProps> = ({ employees }) => {
     };
   }, [activeOrg]);
 
-  // Compute products supplied by our current selected vendor
-  const vendorProducts = useMemo(() => {
-    if (!selectedVendorId) return [];
-    const vendor = vendors.find(v => v.id === selectedVendorId);
-    if (!vendor || !vendor.productIds) return [];
+  // Compute products supplied by any given vendor
+  const getProductsForVendor = (vId: string) => {
+    if (!vId) return [];
+    const vendor = vendors.find(v => v.id === vId);
+    if (!vendor || !vendor.productIds || vendor.productIds.length === 0) {
+      // Fallback: return all products if vendor has no registered products
+      return products;
+    }
     return products.filter(p => vendor.productIds.includes(p.id));
-  }, [selectedVendorId, vendors, products]);
+  };
 
   // Handle Checklist Items Edit
   const addChecklistItemField = () => {
@@ -172,20 +181,60 @@ export const SupplierTasks: React.FC<SupplierTasksProps> = ({ employees }) => {
     setRawChecklistItems(rawChecklistItems.filter((_, idx) => idx !== index));
   };
 
-  // Handle Procurement dynamic items edit
-  const addProcurementItemField = () => {
-    setProcurementItems([...procurementItems, { productId: "", quantity: 1 }]);
+  // Handle Procurement dynamic multi-vendor blocks edit
+  const addProcurementVendorBlock = () => {
+    setProcurementBlocks([
+      ...procurementBlocks,
+      { vendorId: "", items: [{ productId: "", quantity: 1 }] }
+    ]);
   };
 
-  const updateProcurementItemField = (index: number, field: "productId" | "quantity", value: any) => {
-    const updated = [...procurementItems];
-    updated[index] = { ...updated[index], [field]: value };
-    setProcurementItems(updated);
+  const removeProcurementVendorBlock = (vendorIndex: number) => {
+    if (procurementBlocks.length === 1) {
+      toast.error("You need at least one procuring source.");
+      return;
+    }
+    setProcurementBlocks(procurementBlocks.filter((_, idx) => idx !== vendorIndex));
   };
 
-  const removeProcurementItemField = (index: number) => {
-    if (procurementItems.length === 1) return;
-    setProcurementItems(procurementItems.filter((_, idx) => idx !== index));
+  const updateProcurementVendorId = (vendorIndex: number, vId: string) => {
+    const updated = [...procurementBlocks];
+    updated[vendorIndex] = {
+      ...updated[vendorIndex],
+      vendorId: vId,
+      items: [{ productId: "", quantity: 1 }]
+    };
+    setProcurementBlocks(updated);
+  };
+
+  const addProcurementProductToBlock = (vendorIndex: number) => {
+    const updated = [...procurementBlocks];
+    updated[vendorIndex].items.push({ productId: "", quantity: 1 });
+    setProcurementBlocks(updated);
+  };
+
+  const removeProcurementProductFromBlock = (vendorIndex: number, productIndex: number) => {
+    const updated = [...procurementBlocks];
+    if (updated[vendorIndex].items.length === 1) {
+      toast.error("A source must purchase at least one item.");
+      return;
+    }
+    updated[vendorIndex].items = updated[vendorIndex].items.filter((_, idx) => idx !== productIndex);
+    setProcurementBlocks(updated);
+  };
+
+  const updateProcurementProductInBlock = (
+    vendorIndex: number,
+    productIndex: number,
+    field: "productId" | "quantity",
+    value: any
+  ) => {
+    const updated = [...procurementBlocks];
+    updated[vendorIndex].items[productIndex] = {
+      ...updated[vendorIndex].items[productIndex],
+      [field]: value
+    };
+    setProcurementBlocks(updated);
   };
 
   // Build Checklist and Procurement Dispatching Tasks
@@ -205,14 +254,18 @@ export const SupplierTasks: React.FC<SupplierTasksProps> = ({ employees }) => {
         return;
       }
     } else {
-      // procurement checks
-      if (!selectedVendorId) {
-        toast.error("Please select a vendor.");
+      // Multi-sourcing checks
+      const hasUnassignedVendor = procurementBlocks.some(b => !b.vendorId);
+      if (hasUnassignedVendor) {
+        toast.error("Please make sure all sourcing blocks have an assigned vendor.");
         return;
       }
-      const hasInvalidItem = procurementItems.some(i => !i.productId || i.quantity <= 0);
+      
+      const hasInvalidItem = procurementBlocks.some(b => 
+        b.items.some(i => !i.productId || i.quantity <= 0)
+      );
       if (hasInvalidItem) {
-        toast.error("Please configure all items and quantities correctly.");
+        toast.error("Please make sure all product selections and quantity counts are configured.");
         return;
       }
     }
@@ -243,18 +296,38 @@ export const SupplierTasks: React.FC<SupplierTasksProps> = ({ employees }) => {
           .filter(item => item.trim() !== "")
           .map(item => ({ text: item.trim(), completed: false }));
       } else {
-        const vendor = vendors.find(v => v.id === selectedVendorId);
-        taskData.vendorId = selectedVendorId;
-        taskData.vendorName = vendor ? vendor.vendorName : "Unknown Vendor";
+        const flatItems: ProcurementItem[] = [];
+        
+        for (const block of procurementBlocks) {
+          const vendor = vendors.find(v => v.id === block.vendorId);
+          const vName = vendor ? vendor.vendorName : "Unknown Vendor";
+          
+          for (const item of block.items) {
+            const prod = products.find(p => p.id === item.productId);
+            const pName = prod ? prod.name : "Unknown Product";
+            
+            flatItems.push({
+              vendorId: block.vendorId,
+              vendorName: vName,
+              productId: item.productId,
+              productName: pName,
+              quantity: item.quantity,
+              completed: false
+            });
+          }
+        }
+        
+        taskData.items = flatItems;
         taskData.paymentStatus = paymentStatus;
-        taskData.items = procurementItems.map(item => {
-          const prod = products.find(p => p.id === item.productId);
-          return {
-            productId: item.productId,
-            productName: prod ? prod.name : "Unknown Product",
-            quantity: item.quantity
-          };
-        });
+        
+        if (procurementBlocks.length === 1) {
+          const singleVendor = vendors.find(v => v.id === procurementBlocks[0].vendorId);
+          taskData.vendorId = procurementBlocks[0].vendorId;
+          taskData.vendorName = singleVendor ? singleVendor.vendorName : "Unknown Vendor";
+        } else {
+          taskData.vendorId = "multi";
+          taskData.vendorName = `${procurementBlocks.length} Sourced Vendors`;
+        }
       }
 
       await addDoc(collection(db, "tasks"), taskData);
@@ -267,8 +340,7 @@ export const SupplierTasks: React.FC<SupplierTasksProps> = ({ employees }) => {
       setPriority("medium");
       setDueDate("");
       setRawChecklistItems([""]);
-      setSelectedVendorId("");
-      setProcurementItems([{ productId: "", quantity: 1 }]);
+      setProcurementBlocks([{ vendorId: "", items: [{ productId: "", quantity: 1 }] }]);
       setIsCreateOpen(false);
     } catch (err) {
       console.error(err);
@@ -634,113 +706,146 @@ export const SupplierTasks: React.FC<SupplierTasksProps> = ({ employees }) => {
                     </div>
                   </div>
                 ) : (
-                  // Procurement flow setup
-                  <div className="space-y-4 bg-zinc-50 rounded-2xl p-5 border border-zinc-100">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  // Procurement flow setup (Redesigned multi-vendor and multi-product interface)
+                  <div className="space-y-4 bg-zinc-50 rounded-3xl p-5 border border-zinc-100">
+                    <div className="flex justify-between items-center mb-1">
+                      <div>
+                        <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Sourcing Terms & Sourced Vendors</Label>
+                        <p className="text-[8px] text-zinc-400 font-bold uppercase tracking-widest">Connect multiple vendors and products under one mission</p>
+                      </div>
                       
-                      {/* Vendor Selector */}
-                      <div className="space-y-2">
-                        <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Target Supplier Vendor</Label>
-                        <Select value={selectedVendorId} onValueChange={setSelectedVendorId}>
-                          <SelectTrigger className="h-11 rounded-xl bg-white border-zinc-200 font-semibold text-xs text-zinc-900 shadow-none">
-                            <SelectValue placeholder="Pick Vendor Sourced" />
-                          </SelectTrigger>
-                          <SelectContent className="rounded-xl border-none shadow-2xl p-2 max-h-56">
-                            {vendors.map((v) => (
-                              <SelectItem key={v.id} value={v.id} className="font-semibold text-xs py-3.5 rounded-lg">
-                                {v.vendorName} ({v.productIds?.length || 0} mapped)
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      {/* Payment Flow Mode */}
-                      <div className="space-y-2">
-                        <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Procurement Term</Label>
-                        <Select value={paymentStatus} onValueChange={(val: any) => setPaymentStatus(val)}>
-                          <SelectTrigger className="h-11 rounded-xl bg-white border-zinc-200 font-semibold text-xs text-zinc-900 shadow-none">
-                            <SelectValue placeholder="Payment Sizing" />
-                          </SelectTrigger>
-                          <SelectContent className="rounded-xl border-none shadow-2xl p-2">
-                            <SelectItem value="Paid" className="font-semibold text-xs py-2 rounded-lg">Paid (Upfront)</SelectItem>
-                            <SelectItem value="Credit" className="font-semibold text-xs py-2 rounded-lg">Vendor Credit</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={addProcurementVendorBlock}
+                        className="text-indigo-600 font-extrabold uppercase text-[9px] hover:bg-white"
+                      >
+                        <PlusCircle className="mr-1 h-3.5 w-3.5" /> Add Vendor Source
+                      </Button>
                     </div>
 
-                    {/* Mapped Vendor Product selectors */}
-                    <div className="space-y-2.5">
-                      <div className="flex justify-between items-center">
-                        <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Procure Items List</Label>
-                        <Button 
-                          type="button" 
-                          variant="ghost" 
-                          size="sm" 
-                          disabled={!selectedVendorId || vendorProducts.length === 0}
-                          onClick={addProcurementItemField}
-                          className="text-emerald-700 font-extrabold uppercase text-[9px] hover:bg-white"
-                        >
-                          <PlusCircle className="mr-1 h-3.5 w-3.5" /> Append Item
-                        </Button>
+                    <div className="space-y-4">
+                      {/* Global terms */}
+                      <div className="bg-white p-4 rounded-2xl border border-zinc-100 flex items-center justify-between">
+                        <Label className="text-[10px] font-black uppercase text-zinc-500">Global Sourcing Payment Term</Label>
+                        <Select value={paymentStatus} onValueChange={(val: any) => setPaymentStatus(val)}>
+                          <SelectTrigger className="h-10 rounded-xl bg-zinc-50 border-none font-bold text-[10px] uppercase tracking-widest text-zinc-900 w-36 shadow-none">
+                            <SelectValue placeholder="Payment Term" />
+                          </SelectTrigger>
+                          <SelectContent className="rounded-xl border-none shadow-2xl p-1.5">
+                            <SelectItem value="Paid" className="font-bold uppercase text-[9px] tracking-widest">Paid (Upfront)</SelectItem>
+                            <SelectItem value="Credit" className="font-bold uppercase text-[9px] tracking-widest">Vendor Credit</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
 
-                      {!selectedVendorId ? (
-                        <p className="text-[10px] text-zinc-400 italic text-center py-4 uppercase font-bold">
-                          * Please select a Sourcing Vendor above first to explore available product selections
-                        </p>
-                      ) : vendorProducts.length === 0 ? (
-                        <div className="bg-amber-50 rounded-xl p-4 border border-amber-200 text-center text-amber-700 text-[10px] font-black uppercase leading-relaxed">
-                          <Info className="h-4 w-4 mx-auto mb-1.5" />
-                          Selected vendor does not supply any catalog products.<br/>
-                          Align products under Vendors section to enable purchases.
-                        </div>
-                      ) : (
-                        <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
-                          {procurementItems.map((pItem, idx) => (
-                            <div key={`pr-item-row-${idx}`} className="flex items-center gap-2 bg-white p-3 rounded-xl border border-zinc-100">
-                              <div className="flex-1">
-                                <Select 
-                                  value={pItem.productId} 
-                                  onValueChange={(val) => updateProcurementItemField(idx, "productId", val)}
+                      {/* Display Vendor Blocks */}
+                      <div className="space-y-4 max-h-[35vh] overflow-y-auto pr-1">
+                        {procurementBlocks.map((block, vIdx) => {
+                          const associatedProducts = getProductsForVendor(block.vendorId);
+                          return (
+                            <div key={`vendor-block-${vIdx}`} className="bg-white p-4 rounded-2.5xl border border-zinc-100 space-y-3 relative">
+                              <div className="flex justify-between items-center">
+                                <span className="text-[10px] font-black uppercase text-zinc-400">
+                                  Sourcing Vendor #{vIdx + 1}
+                                </span>
+                                {procurementBlocks.length > 1 && (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => removeProcurementVendorBlock(vIdx)}
+                                    className="text-rose-500 hover:text-rose-700 hover:bg-rose-50 h-7 text-[8px] font-black uppercase tracking-widest px-2.5 rounded-lg"
+                                  >
+                                    Remove Vendor Source
+                                  </Button>
+                                )}
+                              </div>
+
+                              <div className="grid grid-cols-1 gap-2.5">
+                                <Select
+                                  value={block.vendorId}
+                                  onValueChange={(val) => updateProcurementVendorId(vIdx, val)}
                                 >
-                                  <SelectTrigger className="h-10 border-zinc-150 rounded-lg text-xs font-semibold focus:outline-none">
-                                    <SelectValue placeholder="Product item name" />
+                                  <SelectTrigger className="h-11 rounded-xl bg-zinc-50 border-none font-semibold text-xs text-zinc-900 shadow-none">
+                                    <SelectValue placeholder="Pick Vendor Sourced" />
                                   </SelectTrigger>
-                                  <SelectContent className="rounded-xl border-none shadow-2xl p-2 max-h-56 max-w-sm">
-                                    {vendorProducts.map((p) => (
-                                      <SelectItem key={p.id} value={p.id} className="font-semibold text-xs py-2 rounded-lg">
-                                        {p.name} (Selling: {formatCurrency(p.price, p.currency || preferredCurrency)})
+                                  <SelectContent className="rounded-xl border-none shadow-2xl p-2 max-h-56">
+                                    {vendors.map((v) => (
+                                      <SelectItem key={v.id} value={v.id} className="font-semibold text-xs py-3.5 rounded-lg">
+                                        {v.vendorName} ({v.productIds?.length || 0} mapped)
                                       </SelectItem>
                                     ))}
                                   </SelectContent>
                                 </Select>
+
+                                {block.vendorId && (
+                                  <div className="space-y-2 pt-1 border-t border-zinc-50">
+                                    <div className="flex justify-between items-center text-[9px] font-black uppercase text-zinc-400">
+                                      <span>Catalog Products Selection</span>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => addProcurementProductToBlock(vIdx)}
+                                        className="text-emerald-700 font-extrabold uppercase text-[8px] h-6 px-2 hover:bg-zinc-50"
+                                      >
+                                        <PlusCircle className="mr-1 h-3 w-3" /> Append Item
+                                      </Button>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                      {block.items.map((prodItem, pIdx) => (
+                                        <div key={`p-item-${pIdx}`} className="flex items-center gap-2 bg-zinc-50 p-2.5 rounded-xl border border-zinc-100">
+                                          <div className="flex-1">
+                                            <Select
+                                              value={prodItem.productId}
+                                              onValueChange={(val) => updateProcurementProductInBlock(vIdx, pIdx, "productId", val)}
+                                            >
+                                              <SelectTrigger className="h-9 border-none bg-white rounded-lg text-xs font-semibold focus:outline-none shadow-sm">
+                                                <SelectValue placeholder="Select product item..." />
+                                              </SelectTrigger>
+                                              <SelectContent className="rounded-xl border-none shadow-2xl p-2 max-h-56 max-w-sm">
+                                                {associatedProducts.map((p) => (
+                                                  <SelectItem key={p.id} value={p.id} className="font-semibold text-xs py-2 rounded-lg">
+                                                    {p.name} (Selling: {formatCurrency(p.price, p.currency || preferredCurrency)})
+                                                  </SelectItem>
+                                                ))}
+                                              </SelectContent>
+                                            </Select>
+                                          </div>
+                                          <div className="w-20">
+                                            <Input
+                                              type="number"
+                                              min={1}
+                                              placeholder="Qty"
+                                              value={prodItem.quantity}
+                                              onChange={(e) => updateProcurementProductInBlock(vIdx, pIdx, "quantity", parseInt(e.target.value) || 1)}
+                                              className="h-9 border-none bg-white rounded-lg text-xs font-semibold text-center shadow-sm"
+                                            />
+                                          </div>
+                                          {block.items.length > 1 && (
+                                            <Button
+                                              type="button"
+                                              variant="ghost"
+                                              size="icon"
+                                              onClick={() => removeProcurementProductFromBlock(vIdx, pIdx)}
+                                              className="rounded-md h-9 w-9 text-zinc-300 hover:text-red-500 hover:bg-white"
+                                            >
+                                              <MinusCircle className="h-4 w-4" />
+                                            </Button>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
                               </div>
-                              <div className="w-20">
-                                <Input
-                                  type="number"
-                                  min={1}
-                                  placeholder="Qty"
-                                  value={pItem.quantity}
-                                  onChange={(e) => updateProcurementItemField(idx, "quantity", parseInt(e.target.value) || 1)}
-                                  className="h-10 border-zinc-150 rounded-lg text-xs font-semibold"
-                                />
-                              </div>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                disabled={procurementItems.length === 1}
-                                onClick={() => removeProcurementItemField(idx)}
-                                className="rounded-md h-10 w-10 text-zinc-300 hover:text-red-500"
-                              >
-                                <MinusCircle className="h-4.5 w-4.5" />
-                              </Button>
                             </div>
-                          ))}
-                        </div>
-                      )}
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
                 )}
