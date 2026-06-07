@@ -745,20 +745,6 @@ export const SupplierTasks: React.FC<SupplierTasksProps> = ({ employees }) => {
                     </div>
 
                     <div className="space-y-4">
-                      {/* Global terms */}
-                      <div className="bg-white p-4 rounded-2xl border border-zinc-100 flex items-center justify-between">
-                        <Label className="text-[10px] font-black uppercase text-zinc-500">Global Sourcing Payment Term</Label>
-                        <Select value={paymentStatus} onValueChange={(val: any) => setPaymentStatus(val)}>
-                          <SelectTrigger className="h-10 rounded-xl bg-zinc-50 border-none font-bold text-[10px] uppercase tracking-widest text-zinc-900 w-36 shadow-none">
-                            <SelectValue placeholder="Payment Term" />
-                          </SelectTrigger>
-                          <SelectContent className="rounded-xl border-none shadow-2xl p-1.5">
-                            <SelectItem value="Paid" className="font-bold uppercase text-[9px] tracking-widest">Paid (Upfront)</SelectItem>
-                            <SelectItem value="Credit" className="font-bold uppercase text-[9px] tracking-widest">Vendor Credit</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
                       {/* Display Vendor Blocks */}
                       <div className="space-y-4 max-h-[35vh] overflow-y-auto pr-1">
                         {procurementBlocks.map((block, vIdx) => {
