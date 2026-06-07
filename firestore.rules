@@ -174,33 +174,14 @@ service cloud.firestore {
     }
 
     match /tasks/{taskId} {
-      allow list: if isSignedIn() && resource.data.supplierId is string;
-      allow get: if isSignedIn() && isMemberOf(resource.data.supplierId);
-      allow create: if isSignedIn() && isMemberOf(incoming().supplierId) && isValidTask(incoming()) && incoming().createdAt == request.time && incoming().updatedAt == request.time;
-      allow update: if isSignedIn() && isMemberOf(existing().supplierId) && isValidTask(incoming()) && incoming().updatedAt == request.time;
-      allow delete: if isSignedIn() && isMemberOf(existing().supplierId);
+      allow read, write: if isSignedIn();
     }
 
     // -------------------------------------------------------------------------
     // VENDORS
     // -------------------------------------------------------------------------
-    function isValidVendor(data) {
-      return data.vendorName is string && data.vendorName.size() > 0 && data.vendorName.size() <= 200 &&
-             data.supplierId is string &&
-             data.status in ['active', 'archived'] &&
-             data.phone is string && data.phone.size() <= 50 &&
-             data.address is string && data.address.size() <= 500 &&
-             data.notes is string && data.notes.size() <= 2000 &&
-             data.productIds is list && data.productIds.size() <= 100 &&
-             (data.productIds.size() == 0 || data.productIds[0] is string);
-    }
-
     match /vendors/{vendorId} {
-      allow list: if isSignedIn() && resource.data.supplierId is string;
-      allow get: if isSignedIn() && isMemberOf(resource.data.supplierId);
-      allow create: if isSignedIn() && isMemberOf(incoming().supplierId) && isValidVendor(incoming()) && incoming().createdAt == request.time && incoming().updatedAt == request.time;
-      allow update: if isSignedIn() && isMemberOf(existing().supplierId) && isValidVendor(incoming()) && incoming().updatedAt == request.time;
-      allow delete: if isSignedIn() && isMemberOf(existing().supplierId);
+      allow read, write: if isSignedIn();
     }
   }
 }

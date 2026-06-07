@@ -770,45 +770,59 @@ export const SupplierTasks: React.FC<SupplierTasksProps> = ({ employees }) => {
 
       {/* Unified Stats Counters */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="rounded-[1.8rem] border-none shadow-sm bg-white p-6 transition-all hover:shadow-md">
-          <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Total Runs Logged</p>
-          <div className="flex justify-between items-baseline mt-2">
-            <h3 className="text-3xl font-black italic text-zinc-900">{stats.total} Directives</h3>
-            <span className="text-[10px] uppercase font-bold text-zinc-400">Checklist/Procure</span>
+        <Card className="rounded-[1.8rem] border-none shadow-sm bg-white p-6 transition-all hover:shadow-md flex flex-col justify-between min-h-[140px]">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Total Runs Logged</p>
+            <div className="flex items-baseline gap-2 mt-2">
+              <span className="text-4xl font-black italic tracking-tight text-zinc-900">{stats.total}</span>
+              <span className="text-sm font-bold text-zinc-500">Directives</span>
+            </div>
+          </div>
+          <div className="mt-4 pt-3 border-t border-zinc-100 flex justify-between items-center text-[10px]">
+            <span className="font-medium text-zinc-400 uppercase tracking-wider">Classification</span>
+            <span className="font-bold text-zinc-600 uppercase tracking-widest">Checklist/Procure</span>
           </div>
         </Card>
         
-        <Card className="rounded-[1.8rem] border-none shadow-sm bg-blue-50/40 border border-blue-100 p-6 transition-all hover:shadow-md">
-          <p className="text-[10px] font-black uppercase tracking-widest text-blue-600">Active Checklist Runs</p>
-          <div className="flex justify-between items-baseline mt-2">
-            <h3 className="text-3xl font-black italic text-blue-800">
-              {stats.clTotal - stats.clCompleted} Runs
-            </h3>
-            <span className="text-[10px] uppercase font-black text-blue-500">
-              {stats.clCompleted} Closed
-            </span>
+        <Card className="rounded-[1.8rem] border-none shadow-sm bg-blue-50/40 border border-blue-100 p-6 transition-all hover:shadow-md flex flex-col justify-between min-h-[140px]">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-blue-600">Active Checklist Runs</p>
+            <div className="flex items-baseline gap-2 mt-2">
+              <span className="text-4xl font-black italic tracking-tight text-blue-800">{stats.clTotal - stats.clCompleted}</span>
+              <span className="text-sm font-bold text-blue-500">Active Runs</span>
+            </div>
+          </div>
+          <div className="mt-4 pt-3 border-t border-blue-100/50 flex justify-between items-center text-[10px]">
+            <span className="font-medium text-blue-400 uppercase tracking-wider">Completed</span>
+            <span className="font-extrabold text-blue-600 uppercase tracking-widest">{stats.clCompleted} Closed</span>
           </div>
         </Card>
 
-        <Card className="rounded-[1.8rem] border-none shadow-sm bg-amber-50/40 border border-amber-100 p-6 transition-all hover:shadow-md">
-          <p className="text-[10px] font-black uppercase tracking-widest text-amber-600">Pending Purchase Review</p>
-          <div className="flex justify-between items-baseline mt-2">
-            <h3 className="text-3xl font-black italic text-amber-800">
-              {stats.prPendingApproval} Awaiting
-            </h3>
-            <span className="text-[10px] uppercase font-black text-amber-500">Gate Block</span>
+        <Card className="rounded-[1.8rem] border-none shadow-sm bg-amber-50/40 border border-amber-100 p-6 transition-all hover:shadow-md flex flex-col justify-between min-h-[140px]">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-amber-600">Pending Purchase Review</p>
+            <div className="flex items-baseline gap-2 mt-2">
+              <span className="text-4xl font-black italic tracking-tight text-amber-800">{stats.prPendingApproval}</span>
+              <span className="text-sm font-bold text-amber-500">Awaiting</span>
+            </div>
+          </div>
+          <div className="mt-4 pt-3 border-t border-amber-100/50 flex justify-between items-center text-[10px]">
+            <span className="font-medium text-amber-400 uppercase tracking-wider">Gate Review</span>
+            <span className="font-extrabold text-amber-600 uppercase tracking-widest">Gate Block</span>
           </div>
         </Card>
 
-        <Card className="rounded-[1.8rem] border-none shadow-sm bg-emerald-50/40 border border-emerald-100 p-6 transition-all hover:shadow-md">
-          <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Approved Pending Intake</p>
-          <div className="flex justify-between items-baseline mt-2">
-            <h3 className="text-3xl font-black italic text-emerald-800">
-              {stats.prApprovedPendingStock} Sourced
-            </h3>
-            <span className="text-[10px] uppercase font-black text-emerald-500">
-              {stats.prStocked} Stocked
-            </span>
+        <Card className="rounded-[1.8rem] border-none shadow-sm bg-emerald-50/40 border border-emerald-100 p-6 transition-all hover:shadow-md flex flex-col justify-between min-h-[140px]">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Approved Pending Intake</p>
+            <div className="flex items-baseline gap-2 mt-2">
+              <span className="text-4xl font-black italic tracking-tight text-emerald-800">{stats.prApprovedPendingStock}</span>
+              <span className="text-sm font-bold text-emerald-500">Sourced</span>
+            </div>
+          </div>
+          <div className="mt-4 pt-3 border-t border-emerald-100/50 flex justify-between items-center text-[10px]">
+            <span className="font-medium text-emerald-400 uppercase tracking-wider">Inventory</span>
+            <span className="font-extrabold text-emerald-600 uppercase tracking-widest">{stats.prStocked} Stocked</span>
           </div>
         </Card>
       </div>
