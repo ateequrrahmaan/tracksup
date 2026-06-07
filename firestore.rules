@@ -183,5 +183,13 @@ service cloud.firestore {
     match /vendors/{vendorId} {
       allow read, write: if isSignedIn();
     }
+
+    // -------------------------------------------------------------------------
+    // INVENTORY MOVEMENTS
+    // -------------------------------------------------------------------------
+    match /inventory_movements/{movementId} {
+      allow read: if isSignedIn() && (resource == null || isMemberOf(resource.data.organizationId));
+      allow write: if isSignedIn() && (request.resource == null || isMemberOf(request.resource.data.organizationId));
+    }
   }
 }

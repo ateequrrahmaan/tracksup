@@ -155,6 +155,29 @@
         "updatedAt": { "type": "string", "format": "date-time", "description": "Last update timestamp." }
       },
       "required": ["supplierId", "vendorName", "status"]
+    },
+    "InventoryMovement": {
+      "title": "InventoryMovement",
+      "description": "Chronological stock movement transactions tracker.",
+      "type": "object",
+      "properties": {
+        "organizationId": { "type": "string", "description": "Supplier organization ID." },
+        "productId": { "type": "string", "description": "ID of the product involved." },
+        "productName": { "type": "string", "description": "Name of the product." },
+        "movementType": { "type": "string", "enum": ["procurement", "order", "adjustment", "correction", "transfer"] },
+        "quantity": { "type": "number", "description": "The transfer/movement stock quantity." },
+        "direction": { "type": "string", "enum": ["in", "out"] },
+        "sourceType": { "type": "string", "enum": ["vendor", "retailer", "manual", "system", "warehouse"] },
+        "sourceId": { "type": "string" },
+        "sourceName": { "type": "string" },
+        "referenceId": { "type": "string" },
+        "referenceNumber": { "type": "string" },
+        "notes": { "type": "string" },
+        "performedBy": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["organizationId", "productId", "productName", "movementType", "quantity", "direction", "sourceType", "performedBy"]
     }
   },
   "firestore": {
@@ -189,6 +212,10 @@
     "/vendors/{vendorId}": {
       "schema": "Vendor",
       "description": "Sourced external vendors."
+    },
+    "/inventory_movements/{movementId}": {
+      "schema": "InventoryMovement",
+      "description": "Chronological product stock movement ledger entries."
     }
   }
 }

@@ -148,3 +148,30 @@ export interface Task {
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
+
+export enum MovementType {
+  PROCUREMENT = "procurement",
+  ORDER = "order",
+  ADJUSTMENT = "adjustment",
+  CORRECTION = "correction",
+  TRANSFER = "transfer"
+}
+
+export interface InventoryMovement {
+  id: string;
+  organizationId: string;
+  productId: string;
+  productName: string;
+  movementType: MovementType;
+  quantity: number;
+  direction: "in" | "out";
+  sourceType: "vendor" | "retailer" | "manual" | "system" | "warehouse";
+  sourceId?: string;
+  sourceName?: string;
+  referenceId?: string;
+  referenceNumber?: string;
+  notes?: string;
+  performedBy: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}

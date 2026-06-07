@@ -469,6 +469,25 @@ export const SupplierTasks: React.FC<SupplierTasksProps> = ({ employees }) => {
             restockHistory: [...restockHistory, historyEntry],
             updatedAt: serverTimestamp()
           });
+
+          // Log movement entry
+          await addDoc(collection(db, "inventory_movements"), {
+            organizationId: activeOrg.id,
+            productId: item.productId,
+            productName: item.productName,
+            movementType: "procurement",
+            quantity: purchasedQty,
+            direction: "in",
+            sourceType: "vendor",
+            sourceId: item.vendorId || "",
+            sourceName: item.vendorName || reviewTask.vendorName || "Vendor Sourced",
+            referenceId: reviewTask.id,
+            referenceNumber: `PRC-${reviewTask.id.slice(-6).toUpperCase()}`,
+            notes: `Integrated from Procurement Mission Run by ${reviewTask.employeeName || "employee"}. Location: ${loc}.`,
+            performedBy: reviewTask.employeeName || "Procurement Agent",
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+          });
         }
       }
 

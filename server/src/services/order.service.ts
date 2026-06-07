@@ -60,13 +60,34 @@ const deductInventoryStock = async (firestore: admin.firestore.Firestore, orderD
         stock: newStock,
         updatedAt: FieldValue.serverTimestamp()
       });
+
+      // Create ledger movement log
+      const mRef = firestore.collection("inventory_movements").doc();
+      batch.set(mRef, {
+        organizationId: supplierId,
+        productId: matchedProduct.id,
+        productName: matchedProduct.name,
+        movementType: "order",
+        quantity: item.quantity,
+        direction: "out",
+        sourceType: "retailer",
+        sourceId: orderData.retailerId || "",
+        sourceName: orderData.retailerName || "Retailer",
+        referenceId: orderData.id || "",
+        referenceNumber: orderData.id ? `ORD-${orderData.id.slice(-6).toUpperCase()}` : "",
+        notes: `Deducted on retail order delivery.`,
+        performedBy: orderData.employeeName || "Delivery Agent",
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp()
+      });
+
       updatedCount++;
     }
   }
 
   if (updatedCount > 0) {
     await batch.commit();
-    console.log(`[OrderService] Deducted inventory stock for ${updatedCount} products upon delivery of order ${orderData.id || ""}`);
+    console.log(`[OrderService] Deducted inventory stock & logged movements for ${updatedCount} products upon delivery of order ${orderData.id || ""}`);
   }
 };
 
@@ -92,13 +113,34 @@ const restoreInventoryStock = async (firestore: admin.firestore.Firestore, order
         stock: currentStock + item.quantity,
         updatedAt: FieldValue.serverTimestamp()
       });
+
+      // Create reversion movement entry
+      const mRef = firestore.collection("inventory_movements").doc();
+      batch.set(mRef, {
+        organizationId: supplierId,
+        productId: matchedProduct.id,
+        productName: matchedProduct.name,
+        movementType: "correction",
+        quantity: item.quantity,
+        direction: "in",
+        sourceType: "system",
+        sourceId: "",
+        sourceName: "System Reversion",
+        referenceId: orderData.id || "",
+        referenceNumber: orderData.id ? `ORD-${orderData.id.slice(-6).toUpperCase()}` : "",
+        notes: `Restored stock due to order state change.`,
+        performedBy: "System",
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp()
+      });
+
       restoredCount++;
     }
   }
 
   if (restoredCount > 0) {
     await batch.commit();
-    console.log(`[OrderService] Restored stock of ${restoredCount} products due to delivery cancel/reversion of order ${orderData.id || ""}`);
+    console.log(`[OrderService] Restored stock & logged movements of ${restoredCount} products due to delivery cancellation/reversion of order ${orderData.id || ""}`);
   }
 };
 
