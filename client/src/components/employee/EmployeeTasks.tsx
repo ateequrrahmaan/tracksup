@@ -516,10 +516,10 @@ export const EmployeeTasks: React.FC = () => {
                                             <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-tighter">
                                               {item.completed ? (
                                                 <span className="text-emerald-600 font-extrabold flex items-center gap-1">
-                                                  Got: {item.purchasedQuantity} @ {formatCurrency(item.purchaseCost ?? 0, preferredCurrency)} ({item.paymentMethod})
+                                                  Got: {item.purchasedQuantity} {item.unit || "Piece"} @ {formatCurrency(item.purchaseCost ?? 0, preferredCurrency)} ({item.paymentMethod})
                                                 </span>
                                               ) : (
-                                                <span>Target: {item.quantity} units</span>
+                                                <span>Target: {item.quantity} {item.unit || "Piece"}</span>
                                               )}
                                             </p>
                                           </div>
@@ -657,18 +657,19 @@ export const EmployeeTasks: React.FC = () => {
                 <div className="flex flex-col gap-0.5">
                   <span className="text-[10px] font-black uppercase text-zinc-400">Selected Product</span>
                   <span className="text-sm font-black uppercase text-zinc-800 tracking-tight">{activeCompletionItem.productName}</span>
-                  <span className="text-[9px] text-zinc-400 font-bold uppercase mt-1">Expected quantity: {activeCompletionItem.quantity} units</span>
+                  <span className="text-[9px] text-zinc-400 font-bold uppercase mt-1">Expected quantity: {activeCompletionItem.quantity} {activeCompletionItem.unit || "Piece"}</span>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 pt-2 border-t border-zinc-200/50">
                   <div className="space-y-1">
-                    <Label className="text-[9px] font-black uppercase text-zinc-400 tracking-wider">Actual Quantity</Label>
+                    <Label className="text-[9px] font-black uppercase text-zinc-400 tracking-wider">Actual Quantity ({activeCompletionItem.unit || "Piece"})</Label>
                     <Input 
                       type="number"
+                      step="any"
                       min={0}
                       required
                       value={actualQty}
-                      onChange={(e) => setActualQty(parseInt(e.target.value) || 0)}
+                      onChange={(e) => setActualQty(parseFloat(e.target.value) || 0)}
                       className="h-11 text-xs font-semibold bg-white border-zinc-200 rounded-xl"
                     />
                   </div>

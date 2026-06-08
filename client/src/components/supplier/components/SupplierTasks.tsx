@@ -49,6 +49,13 @@ import { toast } from "sonner";
 import { Task, SystemUser, Vendor, Product, ProcurementItem, VendorTransactionType, SettlementStatus } from "@/types";
 import { motion, AnimatePresence } from "motion/react";
 import { formatCurrency } from "@/constants";
+import { 
+  UNIT_DEFINITIONS, 
+  formatStock, 
+  convertFromSmallestUnit, 
+  convertToSmallestUnit, 
+  findUnitDefinition 
+} from "@/lib/measurements";
 
 interface SupplierTasksProps {
   employees: SystemUser[];
@@ -56,7 +63,20 @@ interface SupplierTasksProps {
 
 export const SupplierTasks: React.FC<SupplierTasksProps> = ({ employees }) => {
   const { activeOrg, preferredCurrency, user } = useAuth();
-  
+
+  const getCompatibleUnits = (product?: Product) => {
+    if (!product) return [];
+    const mType = product.measurementType || "Count Based";
+    const normType = (mType === "Count Based" || mType === "count") 
+      ? "count" 
+      : (mType === "Weight Based" || mType === "weight") 
+      ? "weight" 
+      : (mType === "Volume Based" || mType === "volume") 
+      ? "volume" 
+      : "count";
+    return UNIT_DEFINITIONS.filter(u => u.type === normType);
+  };
+
   const [tasks, setTasks] = useState<Task[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -84,11 +104,12 @@ export const SupplierTasks: React.FC<SupplierTasksProps> = ({ employees }) => {
     vendorId: string;
     items: {
       productId: string;
-      quantity: number;
+      quantity: any;
+      unit: string;
     }[];
   }
   const [procurementBlocks, setProcurementBlocks] = useState<ProcurementBlock[]>([
-    { vendorId: "", items: [{ productId: "", quantity: 1 }] }
+    { vendorId: "", items: [{ productId: "", quantity: "", unit: "" }] }
   ]);
   const [paymentStatus, setPaymentStatus] = useState<"Paid" | "Credit">("Paid");
 
@@ -202,14 +223,14 @@ export const SupplierTasks: React.FC<SupplierTasksProps> = ({ employees }) => {
     updated[vendorIndex] = {
       ...updated[vendorIndex],
       vendorId: vId,
-      items: [{ productId: "", quantity: 1 }]
+      items: [{ productId: "", quantity: "", unit: "" }]
     };
     setProcurementBlocks(updated);
   };
 
   const addProcurementProductToBlock = (vendorIndex: number) => {
     const updated = [...procurementBlocks];
-    updated[vendorIndex].items.push({ productId: "", quantity: 1 });
+    updated[vendorIndex].items.push({ productId: "", quantity: "", unit: "" });
     setProcurementBlocks(updated);
   };
 
@@ -226,14 +247,23 @@ export const SupplierTasks: React.FC<SupplierTasksProps> = ({ employees }) => {
   const updateProcurementProductInBlock = (
     vendorIndex: number,
     productIndex: number,
-    field: "productId" | "quantity",
+    field: "productId" | "quantity" | "unit",
     value: any
   ) => {
     const updated = [...procurementBlocks];
+    const itemToUpdate = updated[vendorIndex].items[productIndex];
     updated[vendorIndex].items[productIndex] = {
-      ...updated[vendorIndex].items[productIndex],
+      ...itemToUpdate,
       [field]: value
     };
+    
+    if (field === "productId") {
+      const prod = products.find(p => p.id === value);
+      if (prod) {
+        updated[vendorIndex].items[productIndex].unit = prod.baseUnit || "Piece";
+        updated[vendorIndex].items[productIndex].quantity = "";
+      }
+    }
     setProcurementBlocks(updated);
   };
 
@@ -262,10 +292,10 @@ export const SupplierTasks: React.FC<SupplierTasksProps> = ({ employees }) => {
       }
       
       const hasInvalidItem = procurementBlocks.some(b => 
-        b.items.some(i => !i.productId || i.quantity <= 0)
+        b.items.some(i => !i.productId || !i.unit || parseFloat(i.quantity as any) <= 0 || isNaN(parseFloat(i.quantity as any)))
       );
       if (hasInvalidItem) {
-        toast.error("Please make sure all product selections and quantity counts are configured.");
+        toast.error("Please make sure all product selections, quantity counts, and units are configured.");
         return;
       }
     }
@@ -311,8 +341,10 @@ export const SupplierTasks: React.FC<SupplierTasksProps> = ({ employees }) => {
               vendorName: vName,
               productId: item.productId,
               productName: pName,
-              quantity: item.quantity,
-              completed: false
+              quantity: parseFloat(item.quantity) || 0,
+              completed: false,
+              unit: item.unit || prod?.baseUnit || "Piece",
+              measurementType: prod?.measurementType || "Count Based"
             });
           }
         }
@@ -340,7 +372,7 @@ export const SupplierTasks: React.FC<SupplierTasksProps> = ({ employees }) => {
       setPriority("medium");
       setDueDate("");
       setRawChecklistItems([""]);
-      setProcurementBlocks([{ vendorId: "", items: [{ productId: "", quantity: 1 }] }]);
+      setProcurementBlocks([{ vendorId: "", items: [{ productId: "", quantity: "", unit: "" }] }]);
       setIsCreateOpen(false);
     } catch (err) {
       console.error(err);
@@ -491,13 +523,16 @@ export const SupplierTasks: React.FC<SupplierTasksProps> = ({ employees }) => {
           const prodData = prodSnap.data();
           const currentStock = prodData.stock || 0;
           const purchasedQty = item.purchasedQuantity ?? item.quantity;
-          const newStock = currentStock + purchasedQty;
+          const smallestQtyAdded = convertToSmallestUnit(purchasedQty, item.unit || "Piece");
+          const newStock = currentStock + smallestQtyAdded;
           
           // Formulate intake history logs
           const historyEntry = {
             date: new Date().toISOString(),
             quantity: purchasedQty,
+            quantityAdded: smallestQtyAdded,
             cost: item.purchaseCost ?? 0,
+            unitCost: item.purchaseCost ?? 0,
             vendorName: reviewTask.vendorName || "Vendor Sourced",
             warehouseLocation: loc,
             note: `Integrated from Procurement Run #${reviewTask.id.slice(-6).toUpperCase()}`
@@ -518,14 +553,14 @@ export const SupplierTasks: React.FC<SupplierTasksProps> = ({ employees }) => {
             productId: item.productId,
             productName: item.productName,
             movementType: "procurement",
-            quantity: purchasedQty,
+            quantity: smallestQtyAdded,
             direction: "in",
             sourceType: "vendor",
             sourceId: item.vendorId || "",
             sourceName: item.vendorName || reviewTask.vendorName || "Vendor Sourced",
             referenceId: reviewTask.id,
             referenceNumber: `PRC-${reviewTask.id.slice(-6).toUpperCase()}`,
-            notes: `Integrated from Procurement Mission Run by ${reviewTask.employeeName || "employee"}. Location: ${loc}.`,
+            notes: `Integrated from Procurement Mission Run by ${reviewTask.employeeName || "employee"}. Location: ${loc}. Input: ${purchasedQty} ${item.unit || "Piece"}.`,
             performedBy: reviewTask.employeeName || "Procurement Agent",
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp()
@@ -843,48 +878,82 @@ export const SupplierTasks: React.FC<SupplierTasksProps> = ({ employees }) => {
                                     </div>
 
                                     <div className="space-y-2">
-                                      {block.items.map((prodItem, pIdx) => (
-                                        <div key={`p-item-${pIdx}`} className="flex items-center gap-2 bg-zinc-50 p-2.5 rounded-xl border border-zinc-100">
-                                          <div className="flex-1">
-                                            <Select
-                                              value={prodItem.productId}
-                                              onValueChange={(val) => updateProcurementProductInBlock(vIdx, pIdx, "productId", val)}
-                                            >
-                                              <SelectTrigger className="h-9 border-none bg-white rounded-lg text-xs font-semibold focus:outline-none shadow-sm">
-                                                <SelectValue placeholder="Select product item..." />
-                                              </SelectTrigger>
-                                              <SelectContent className="rounded-xl border-none shadow-2xl p-2 max-h-56 max-w-sm">
-                                                {associatedProducts.map((p) => (
-                                                  <SelectItem key={p.id} value={p.id} className="font-semibold text-xs py-2 rounded-lg">
-                                                    {p.name} (Selling: {formatCurrency(p.price, p.currency || preferredCurrency)})
-                                                  </SelectItem>
-                                                ))}
-                                              </SelectContent>
-                                            </Select>
+                                      {block.items.map((prodItem, pIdx) => {
+                                        const prod = products.find(p => p.id === prodItem.productId);
+                                        return (
+                                          <div key={`p-item-${pIdx}`} className="space-y-1.5 bg-zinc-50 p-2.5 rounded-xl border border-zinc-100">
+                                            <div className="flex items-center gap-2">
+                                              <div className="flex-1 min-w-0">
+                                                <Select
+                                                  value={prodItem.productId}
+                                                  onValueChange={(val) => updateProcurementProductInBlock(vIdx, pIdx, "productId", val)}
+                                                >
+                                                  <SelectTrigger className="h-9 border-none bg-white rounded-lg text-xs font-semibold focus:outline-none shadow-sm">
+                                                    <SelectValue placeholder="Select product item..." />
+                                                  </SelectTrigger>
+                                                  <SelectContent className="rounded-xl border-none shadow-2xl p-2 max-h-56 max-w-sm">
+                                                    {associatedProducts.map((p) => (
+                                                      <SelectItem key={p.id} value={p.id} className="font-semibold text-xs py-2 rounded-lg">
+                                                        {p.name} (Selling: {formatCurrency(p.price, p.currency || preferredCurrency)})
+                                                      </SelectItem>
+                                                    ))}
+                                                  </SelectContent>
+                                                </Select>
+                                              </div>
+                                              
+                                              {prodItem.productId && (
+                                                <div className="w-24 shrink-0">
+                                                  <Select
+                                                    value={prodItem.unit}
+                                                    onValueChange={(val) => updateProcurementProductInBlock(vIdx, pIdx, "unit", val)}
+                                                  >
+                                                    <SelectTrigger className="h-9 border-none bg-white rounded-lg text-xs font-semibold focus:outline-none shadow-sm">
+                                                      <SelectValue placeholder="Unit" />
+                                                    </SelectTrigger>
+                                                    <SelectContent className="rounded-xl border-none shadow-2xl p-2">
+                                                      {getCompatibleUnits(prod).map((u) => (
+                                                        <SelectItem key={u.name} value={u.name} className="font-semibold text-xs py-2 rounded-lg">
+                                                          {u.abbreviation || u.name}
+                                                        </SelectItem>
+                                                      ))}
+                                                    </SelectContent>
+                                                  </Select>
+                                                </div>
+                                              )}
+
+                                              <div className="w-20 shrink-0">
+                                                <Input
+                                                  type="number"
+                                                  step="any"
+                                                  min={0.001}
+                                                  placeholder="Qty"
+                                                  value={prodItem.quantity}
+                                                  onChange={(e) => updateProcurementProductInBlock(vIdx, pIdx, "quantity", e.target.value)}
+                                                  className="h-9 border-none bg-white rounded-lg text-xs font-semibold text-center shadow-sm w-full"
+                                                />
+                                              </div>
+                                              {block.items.length > 1 && (
+                                                <Button
+                                                  type="button"
+                                                  variant="ghost"
+                                                  size="icon"
+                                                  onClick={() => removeProcurementProductFromBlock(vIdx, pIdx)}
+                                                  className="rounded-md h-9 w-9 text-zinc-300 hover:text-red-500 hover:bg-white shrink-0"
+                                                >
+                                                  <MinusCircle className="h-4 w-4" />
+                                                </Button>
+                                              )}
+                                            </div>
+                                            {prod && (
+                                              <div className="text-[9px] text-zinc-500 font-bold uppercase mt-1 flex items-center gap-1.5 px-1 py-0.5">
+                                                <span className="text-zinc-400">Type:</span> <span className="text-zinc-700">{prod.measurementType || "Count Based"}</span>
+                                                <span className="text-zinc-300">•</span>
+                                                <span className="text-zinc-400">Est. Cost:</span> <span className="text-zinc-700">{formatCurrency(prod.unitCost || (prod.price * 0.5), prod.currency || preferredCurrency)} / {prodItem.unit || "Piece"}</span>
+                                              </div>
+                                            )}
                                           </div>
-                                          <div className="w-20">
-                                            <Input
-                                              type="number"
-                                              min={1}
-                                              placeholder="Qty"
-                                              value={prodItem.quantity}
-                                              onChange={(e) => updateProcurementProductInBlock(vIdx, pIdx, "quantity", parseInt(e.target.value) || 1)}
-                                              className="h-9 border-none bg-white rounded-lg text-xs font-semibold text-center shadow-sm"
-                                            />
-                                          </div>
-                                          {block.items.length > 1 && (
-                                            <Button
-                                              type="button"
-                                              variant="ghost"
-                                              size="icon"
-                                              onClick={() => removeProcurementProductFromBlock(vIdx, pIdx)}
-                                              className="rounded-md h-9 w-9 text-zinc-300 hover:text-red-500 hover:bg-white"
-                                            >
-                                              <MinusCircle className="h-4 w-4" />
-                                            </Button>
-                                          )}
-                                        </div>
-                                      ))}
+                                        );
+                                      })}
                                     </div>
                                   </div>
                                 )}
@@ -1158,7 +1227,7 @@ export const SupplierTasks: React.FC<SupplierTasksProps> = ({ employees }) => {
                                 <div key={idx} className="flex justify-between items-center text-xs font-semibold text-zinc-750">
                                   <span>{pItem.productName}</span>
                                   <span className="text-zinc-500 text-[11px]">
-                                    Req: {qtyRequested} {qtyPurchased !== undefined && `| Got: ${qtyPurchased}`}
+                                    Req: {qtyRequested} {pItem.unit || "Piece"} {qtyPurchased !== undefined && `| Got: ${qtyPurchased} ${pItem.unit || "Piece"}`}
                                   </span>
                                 </div>
                               );
@@ -1318,56 +1387,103 @@ export const SupplierTasks: React.FC<SupplierTasksProps> = ({ employees }) => {
                       <TableRow>
                         <TableHead className="text-[9px] font-black uppercase pl-4">Item Sourced</TableHead>
                         <TableHead className="text-[9px] font-black uppercase text-center">Req / Rec</TableHead>
-                        <TableHead className="text-[9px] font-black uppercase text-right">Cost Price</TableHead>
-                        <TableHead className="text-[9px] font-black uppercase text-right pr-4">Active Selling</TableHead>
+                        <TableHead className="text-[9px] font-black uppercase text-center">Variance</TableHead>
+                        <TableHead className="text-[9px] font-black uppercase text-right">Purchase Cost</TableHead>
+                        <TableHead className="text-[9px] font-black uppercase text-right">Active Selling</TableHead>
+                        <TableHead className="text-[9px] font-black uppercase text-right pr-4">Inventory Impact</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {reviewTask.items?.map((item) => {
+                        const reqQty = item.quantity;
                         const recQty = item.purchasedQuantity ?? item.quantity;
+                        const variance = recQty - reqQty;
                         const uCost = item.purchaseCost ?? 0;
                         const sellPrice = sellingPrices[item.productId] ?? 0;
                         const marginPercent = sellPrice > 0 ? ((sellPrice - uCost) / sellPrice) * 100 : 0;
                         const prod = products.find(p => p.id === item.productId);
+                        const unit = item.unit || "Piece";
+                        const mType = item.measurementType || "Count Based";
+
+                        // Compute inventory preview
+                        let inventoryPreview = null;
+                        if (prod) {
+                          const currentStockRaw = prod.stock || 0;
+                          const incomingRaw = convertToSmallestUnit(recQty, unit);
+                          const projectedRaw = currentStockRaw + incomingRaw;
+                          const currentStockFormatted = formatStock(currentStockRaw, prod.measurementType, prod.baseUnit);
+                          const incomingFormatted = formatStock(incomingRaw, prod.measurementType, prod.baseUnit);
+                          const projectedFormatted = formatStock(projectedRaw, prod.measurementType, prod.baseUnit);
+                          inventoryPreview = {
+                            current: currentStockFormatted,
+                            incoming: incomingFormatted,
+                            projected: projectedFormatted
+                          };
+                        }
 
                         return (
                           <TableRow key={item.productId} className="hover:bg-zinc-50 transition-colors">
-                            <TableCell className="pl-4 py-3.5">
-                              <p className="text-xs font-black uppercase tracking-tight text-zinc-800">{item.productName}</p>
+                            <TableCell className="pl-4 py-3.5 max-w-[150px]">
+                              <p className="text-xs font-black uppercase tracking-tight text-zinc-855 leading-none">{item.productName}</p>
+                              <p className="text-[8px] text-zinc-400 font-extrabold uppercase mt-1 leading-none">{mType}</p>
                               {reviewTask.status !== "approved" && (
-                                <p className={`text-[9px] uppercase font-bold mt-1 ${marginPercent >= 20 ? "text-emerald-600" : "text-amber-600"}`}>
+                                <p className={`text-[10px] uppercase font-black mt-2 leading-none ${marginPercent >= 20 ? "text-emerald-600" : "text-amber-600"}`}>
                                   Margin: {marginPercent.toFixed(1)}%
                                 </p>
                               )}
                             </TableCell>
-                            <TableCell className="text-center text-xs font-extrabold text-zinc-700 py-3.5">
-                              {item.quantity} / <b className="text-zinc-900">{recQty}</b>
+                            <TableCell className="text-center py-3.5">
+                              <div className="flex flex-col items-center leading-tight">
+                                <span className="text-[10px] font-semibold text-zinc-400">Req: {reqQty} {unit}</span>
+                                <span className="text-xs font-black text-zinc-900 mt-0.5">Rec: {recQty} {unit}</span>
+                              </div>
                             </TableCell>
-                            <TableCell className="text-right text-xs font-extrabold text-zinc-800 py-3.5">
-                              {formatCurrency(uCost, preferredCurrency)}
-                              <p className="text-[9px] text-zinc-400 font-bold">Total: {formatCurrency(recQty * uCost, preferredCurrency)}</p>
+                            <TableCell className="text-center py-3.5">
+                              {variance === 0 ? (
+                                <span className="text-[10px] font-bold text-zinc-400">No Variance</span>
+                              ) : (
+                                <Badge 
+                                  variant={variance > 0 ? "outline" : "destructive"} 
+                                  className={`text-[9px] font-black uppercase py-0 rounded-md ${variance > 0 ? "border-emerald-200 bg-emerald-50 text-emerald-700" : ""}`}
+                                >
+                                  {variance > 0 ? `+${variance.toFixed(3)}` : variance.toFixed(3)} {unit}
+                                </Badge>
+                              )}
                             </TableCell>
-                            <TableCell className="text-right pr-4 py-3.5">
+                            <TableCell className="text-right py-3.5 leading-tight">
+                              <span className="text-xs font-black text-zinc-800">
+                                {formatCurrency(uCost, preferredCurrency)} / {unit}
+                              </span>
+                              <p className="text-[9px] text-zinc-400 font-extrabold uppercase mt-0.5">Total: {formatCurrency(recQty * uCost, preferredCurrency)}</p>
+                            </TableCell>
+                            <TableCell className="text-right py-3.5">
                               {reviewTask.status === "approved" ? (
-                                // Read-only for stocking step
-                                <span className="text-sm font-black italic tracking-wide">
-                                  {formatCurrency(sellPrice, preferredCurrency)}
+                                <span className="text-xs font-black text-indigo-700 italic">
+                                  {formatCurrency(sellPrice, preferredCurrency)} / {unit}
                                 </span>
                               ) : (
-                                // Editable selling price on approval step
-                                <div className="flex items-center gap-1 justify-end max-w-[110px] ml-auto">
-                                  <span className="text-xs font-semibold text-zinc-400">{preferredCurrency}</span>
+                                <div className="flex items-center gap-1 justify-end max-w-[120px] ml-auto">
                                   <Input 
                                     type="number"
                                     min={0}
-                                    step="0.01"
+                                    step="any"
                                     value={sellPrice}
                                     onChange={(e) => {
                                       const val = parseFloat(e.target.value) || 0;
                                       setSellingPrices(prev => ({ ...prev, [item.productId]: val }));
                                     }}
-                                    className="h-9 text-xs font-black text-right rounded-lg w-16"
+                                    className="h-8 text-xs font-black text-right rounded-lg w-16 px-1.5 bg-white border-zinc-200"
                                   />
+                                  <span className="text-[9px] font-bold text-zinc-400 uppercase">/ {unit}</span>
+                                </div>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right pr-4 py-3.5 text-[9px] font-bold uppercase tracking-tighter text-zinc-500">
+                              {inventoryPreview && (
+                                <div className="flex flex-col items-end space-y-0.5 leading-tight">
+                                  <span>Cur: <b className="text-zinc-700 font-extrabold">{inventoryPreview.current}</b></span>
+                                  <span className="text-emerald-600">Inc: <b className="font-extrabold">+{inventoryPreview.incoming}</b></span>
+                                  <span>Proj: <b className="text-zinc-800 font-extrabold">{inventoryPreview.projected}</b></span>
                                 </div>
                               )}
                             </TableCell>

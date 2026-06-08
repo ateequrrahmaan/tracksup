@@ -128,6 +128,8 @@ export interface ProcurementItem {
   warehouseLocation?: string; // future-ready warehouse location string
   paymentMethod?: "Paid" | "Credit";
   notes?: string;
+  measurementType?: string;
+  unit?: string;
 }
 
 export interface Task {
