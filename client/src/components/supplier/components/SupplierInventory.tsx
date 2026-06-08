@@ -778,51 +778,47 @@ export const SupplierInventory: React.FC = () => {
                       {filteredProducts.map(product => (
                         <div 
                           key={product.id} 
-                          className="p-5 bg-zinc-50 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border border-zinc-100 hover:border-zinc-200 transition-all"
+                          className="p-5 bg-zinc-50 rounded-2xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 border border-zinc-100 hover:border-zinc-200 transition-all"
                         >
                           <div className="flex items-center gap-4 min-w-0 flex-1">
                             <div className="h-12 w-12 rounded-xl overflow-hidden bg-zinc-200 flex-shrink-0">
                               <img src={product.imageUrl} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                             </div>
-                            <div className="min-w-0">
-                              <h5 className="font-black text-zinc-900 uppercase italic text-sm tracking-tight truncate">{product.name}</h5>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <h5 className="font-black text-zinc-900 uppercase italic text-sm tracking-tight truncate max-w-[140px] sm:max-w-none">{product.name}</h5>
+                                <Badge className={`font-mono font-black text-[9px] uppercase tracking-widest rounded-lg px-2 py-0.5 border-none flex-shrink-0 select-none ${
+                                  product.currentStock === 0 ? "bg-rose-100 text-rose-700 hover:bg-rose-100 animate-pulse" : 
+                                  convertFromSmallestUnit(product.currentStock, product.baseUnit || "Piece") <= 10 ? "bg-amber-100 text-amber-800 hover:bg-amber-100" : "bg-emerald-100 text-emerald-800 hover:bg-emerald-100"
+                                }`}>
+                                  {formatStock(product.currentStock, product.measurementType, product.baseUnit)}
+                                </Badge>
+                              </div>
                               <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mt-1">Sale Price: {formatCurrency(product.price, product.currency)}</p>
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-4 self-stretch sm:self-auto justify-between sm:justify-end">
-                            <div className="text-right sm:text-right mr-3">
-                              <p className="text-[9px] font-black uppercase text-zinc-400 tracking-widest">Active Stock</p>
-                              <p className={`font-mono font-black text-xs italic mt-1 ${
-                                product.currentStock === 0 ? "text-rose-600 animate-pulse" : 
-                                convertFromSmallestUnit(product.currentStock, product.baseUnit || "Piece") <= 10 ? "text-amber-500" : "text-zinc-900"
-                              }`}>
-                                {formatStock(product.currentStock, product.measurementType, product.baseUnit)}
-                              </p>
-                            </div>
+                          <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap justify-between sm:justify-end w-full sm:w-auto mt-2 sm:mt-0 pt-2 sm:pt-0 border-t sm:border-none border-zinc-100">
+                            <Button 
+                              onClick={() => setSelectedHistoryProduct(product)}
+                              className="h-10 text-[9px] font-black uppercase tracking-widest px-4 rounded-xl border border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-100 flex items-center justify-center gap-1.5 shadow-sm flex-1 sm:flex-none"
+                            >
+                              <History className="h-3.5 w-3.5" /> History / Journey
+                            </Button>
 
-                            <div className="flex items-center gap-2">
-                              <Button 
-                                onClick={() => setSelectedHistoryProduct(product)}
-                                className="h-10 text-[9px] font-black uppercase tracking-widest px-4 rounded-xl border border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-100 flex items-center gap-1 shadow-sm"
-                              >
-                                <History className="h-3.5 w-3.5" /> History / Journey
-                              </Button>
-
-                              <Button 
-                                onClick={() => {
-                                  setSelectedProductId(product.id);
-                                  setRestockQty("");
-                                  const cost = (product as any).unitCost || (product.price * 0.5);
-                                  setUnitCostInput(cost.toFixed(2));
-                                  setRestockNotes("");
-                                  setIsRestockOpen(true);
-                                }}
-                                className="h-10 text-[9px] font-black uppercase tracking-widest px-4 rounded-xl bg-zinc-900 text-white hover:bg-zinc-805 shadow-sm"
-                              >
-                                Restock
-                              </Button>
-                            </div>
+                            <Button 
+                              onClick={() => {
+                                setSelectedProductId(product.id);
+                                setRestockQty("");
+                                const cost = (product as any).unitCost || (product.price * 0.5);
+                                setUnitCostInput(cost.toFixed(2));
+                                setRestockNotes("");
+                                setIsRestockOpen(true);
+                              }}
+                              className="h-10 text-[9px] font-black uppercase tracking-widest px-4 rounded-xl bg-zinc-900 text-white hover:bg-zinc-800 shadow-sm flex-1 sm:flex-none"
+                            >
+                              Restock
+                            </Button>
                           </div>
                         </div>
                       ))}
