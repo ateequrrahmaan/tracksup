@@ -3,6 +3,7 @@ import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, doc, updateDoc, arrayUnion, Timestamp, serverTimestamp, addDoc } from "firebase/firestore";
 import { useAuth } from "@/lib/auth-context";
 import { Product, Order, OrderItem, InventoryMovement, MovementType } from "@/types";
+import { UNIT_DEFINITIONS, formatStock, convertFromSmallestUnit, convertToSmallestUnit, findUnitDefinition } from "@/lib/measurements";
 import { formatCurrency } from "@/constants";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -75,6 +76,7 @@ export const SupplierInventory: React.FC = () => {
   const [isRestockOpen, setIsRestockOpen] = useState(false);
   const [selectedProductId, setSelectedProductId] = useState("");
   const [restockQty, setRestockQty] = useState("");
+  const [restockUnit, setRestockUnit] = useState("Piece");
   const [unitCostInput, setUnitCostInput] = useState("");
   const [restockNotes, setRestockNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -119,6 +121,16 @@ export const SupplierInventory: React.FC = () => {
     };
   }, [activeOrg]);
 
+  // Synchronize restockUnit on selectedProductId changes
+  useEffect(() => {
+    if (selectedProductId) {
+      const prod = products.find(p => p.id === selectedProductId);
+      if (prod) {
+        setRestockUnit(prod.baseUnit || "Piece");
+      }
+    }
+  }, [selectedProductId, products]);
+
   // Aggregate pending product demands
   const pendingDemands = useMemo(() => {
     const demandMap: Record<string, number> = {};
@@ -127,11 +139,14 @@ export const SupplierInventory: React.FC = () => {
     pendingOrders.forEach(order => {
       order.items?.forEach(item => {
         const normalizedName = item.name.toLowerCase().trim();
-        demandMap[normalizedName] = (demandMap[normalizedName] || 0) + item.quantity;
+        const prod = products.find(p => p.name.toLowerCase().trim() === normalizedName);
+        const itemUnit = item.unit || prod?.baseUnit || "Piece";
+        const qtyInSmallestUnit = convertToSmallestUnit(item.quantity, itemUnit);
+        demandMap[normalizedName] = (demandMap[normalizedName] || 0) + qtyInSmallestUnit;
       });
     });
     return demandMap;
-  }, [orders]);
+  }, [orders, products]);
 
   // Combined product detail mapping for display and calculations
   const productMetrics = useMemo(() => {
@@ -139,7 +154,10 @@ export const SupplierInventory: React.FC = () => {
       const normalizedName = p.name.toLowerCase().trim();
       const requestedQty = pendingDemands[normalizedName] || 0;
       const currentStock = typeof p.stock === "number" ? p.stock : 0;
-      const isLowStock = currentStock > 0 && currentStock <= 10;
+      
+      const baseUnit = p.baseUnit || "Piece";
+      const currentStockInBaseUnit = convertFromSmallestUnit(currentStock, baseUnit);
+      const isLowStock = currentStock > 0 && currentStockInBaseUnit <= 10;
       const isOutOfStock = currentStock === 0;
       
       let stockStatus: "out" | "low" | "sufficient" = "sufficient";
@@ -178,8 +196,11 @@ export const SupplierInventory: React.FC = () => {
 
     products.forEach(p => {
       const stock = typeof p.stock === "number" ? p.stock : 0;
+      const baseUnit = p.baseUnit || "Piece";
+      const stockInBaseUnit = convertFromSmallestUnit(stock, baseUnit);
+      
       // Valuation at market price
-      totalStockValue += stock * (p.price || 0);
+      totalStockValue += stockInBaseUnit * (p.price || 0);
 
       const history = (p as any).restockHistory || [];
       // Calculate capital spent
@@ -189,12 +210,12 @@ export const SupplierInventory: React.FC = () => {
       } else {
         // Fallback if no history log is populated
         const unitCost = (p as any).unitCost || (p.price * 0.5); // Default estimate 50%
-        cumulativeInvestment = stock * unitCost;
+        cumulativeInvestment = stockInBaseUnit * unitCost;
       }
       totalCapitalInvested += cumulativeInvestment;
 
       if (stock === 0) outOfStockCount++;
-      else if (stock <= 10) lowStockCount++;
+      else if (stockInBaseUnit <= 10) lowStockCount++;
     });
 
     const netValueAfterInvestment = totalStockValue - totalCapitalInvested;
@@ -394,12 +415,14 @@ export const SupplierInventory: React.FC = () => {
   // Quick Action triggered by the Production Section (Fulfillment alerts)
   const triggerQuickProduction = (product: typeof productMetrics[0]) => {
     setSelectedProductId(product.id);
-    setRestockQty(product.deficit.toString());
+    const baseUnit = product.baseUnit || "Piece";
+    const qtyInBaseUnit = convertFromSmallestUnit(product.deficit, baseUnit);
+    setRestockQty(qtyInBaseUnit.toString());
     const unitPrice = product.price || 0;
     // Estimate a standard production cost if not exists (e.g. 60% of sale price)
     const estimatedCost = (product as any).unitCost || (unitPrice * 0.6);
     setUnitCostInput(estimatedCost.toFixed(2));
-    setRestockNotes(`Fulfillment run for outstanding retail demand. Required deficit: ${product.deficit} units.`);
+    setRestockNotes(`Fulfillment run for outstanding retail demand. Required deficit: ${formatStock(product.deficit, product.measurementType, baseUnit)}.`);
     setIsRestockOpen(true);
   };
 
@@ -418,11 +441,11 @@ export const SupplierInventory: React.FC = () => {
       return;
     }
 
-    const qty = parseInt(restockQty);
+    const qty = parseFloat(restockQty);
     const unitCost = parseFloat(unitCostInput);
 
     if (isNaN(qty) || qty <= 0) {
-      toast.error("Restock quantity must be a positive integer");
+      toast.error("Restock quantity must be a positive number");
       return;
     }
 
@@ -437,13 +460,17 @@ export const SupplierInventory: React.FC = () => {
       const productObj = products.find(p => p.id === selectedProductId);
       if (!productObj) throw new Error("Target product structure missing");
 
+      // Convert input quantity to database smallest unit
+      const qtyInSmallestUnit = convertToSmallestUnit(qty, restockUnit);
       const existingStock = typeof productObj.stock === "number" ? productObj.stock : 0;
-      const newStockTotal = existingStock + qty;
+      const newStockTotal = existingStock + qtyInSmallestUnit;
       const totalCostVal = qty * unitCost;
 
       // Construct history node
       const restockEntry = {
-        quantityAdded: qty,
+        quantityAdded: qtyInSmallestUnit,
+        displayQty: qty,
+        unit: restockUnit,
         unitCost,
         totalCost: totalCostVal,
         date: new Date().toISOString(),
@@ -457,28 +484,28 @@ export const SupplierInventory: React.FC = () => {
         restockHistory: arrayUnion(restockEntry)
       });
 
-      // Log manual adjustment movement log
+      // Log manual adjustment movement log using smallest-unit
       if (activeOrg) {
         await addDoc(collection(db, "inventory_movements"), {
           organizationId: activeOrg.id,
           productId: selectedProductId,
           productName: productObj.name,
           movementType: "adjustment",
-          quantity: qty,
+          quantity: qtyInSmallestUnit,
           direction: "in",
           sourceType: "manual",
           sourceId: "",
           sourceName: "Manual Adjustment",
           referenceId: "",
           referenceNumber: "",
-          notes: restockNotes || "Standard Manual Restock Adjustment",
+          notes: restockNotes || `Standard Manual Restock Adjustment (+${qty} ${restockUnit})`,
           performedBy: user?.name || user?.email || "Supplier Admin",
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
         });
       }
 
-      toast.success(`Success! Added ${qty} units of "${productObj.name}" to active stock matrix.`);
+      toast.success(`Success! Added ${formatStock(qtyInSmallestUnit, productObj.measurementType, productObj.baseUnit || "Piece")} to "${productObj.name}".`);
       setIsRestockOpen(false);
       // Reset inputs
       setRestockQty("");
@@ -493,6 +520,17 @@ export const SupplierInventory: React.FC = () => {
   };
 
   const currencyValue = preferredCurrency || "USD";
+
+  const selectedProdObj = products.find(p => p.id === selectedProductId);
+  const mType = selectedProdObj?.measurementType || "count";
+  const normType = (mType === "Count Based" || mType === "count") 
+    ? "count" 
+    : (mType === "Weight Based" || mType === "weight") 
+    ? "weight" 
+    : (mType === "Volume Based" || mType === "volume") 
+    ? "volume" 
+    : "count";
+  const compatibleUnits = UNIT_DEFINITIONS.filter(u => u.type === normType);
 
   return (
     <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -646,11 +684,14 @@ export const SupplierInventory: React.FC = () => {
                         {productMetrics.filter(p => p.requestedQty > 0).map((prod) => (
                           <TableRow key={prod.id} className="h-20 hover:bg-zinc-50/50 transition-all border-b border-zinc-50">
                             <TableCell className="px-8 font-black uppercase italic text-zinc-900 text-sm tracking-tight">{prod.name}</TableCell>
-                            <TableCell className="font-mono text-zinc-650 font-bold">{prod.currentStock} units</TableCell>
-                            <TableCell className="font-mono text-zinc-900 font-black">{prod.requestedQty} units</TableCell>
+                            <TableCell className="font-mono text-zinc-650 font-bold">{formatStock(prod.currentStock, prod.measurementType, prod.baseUnit)}</TableCell>
+                            <TableCell className="font-mono text-zinc-900 font-black">{formatStock(prod.requestedQty, prod.measurementType, prod.baseUnit)}</TableCell>
                             <TableCell>
                               <span className={`font-mono font-bold ${prod.deficit > 0 ? "text-rose-600" : "text-emerald-600"}`}>
-                                {prod.deficit > 0 ? `-${prod.deficit} short` : `+${prod.currentStock - prod.requestedQty} margin`}
+                                {prod.deficit > 0 
+                                  ? `-${formatStock(prod.deficit, prod.measurementType, prod.baseUnit)} short` 
+                                  : `+${formatStock(prod.currentStock - prod.requestedQty, prod.measurementType, prod.baseUnit)} margin`
+                                }
                               </span>
                             </TableCell>
                             <TableCell>
@@ -671,7 +712,7 @@ export const SupplierInventory: React.FC = () => {
                                   onClick={() => triggerQuickProduction(prod)}
                                   className="w-full rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black uppercase tracking-widest text-[9px] h-10 px-4 flex items-center justify-center gap-2"
                                 >
-                                  Add {prod.deficit} Stock <ArrowRight className="h-3.5 w-3.5" />
+                                  Add {formatStock(prod.deficit, prod.measurementType, prod.baseUnit)} Stock <ArrowRight className="h-3.5 w-3.5" />
                                 </Button>
                               )}
                             </TableCell>
@@ -754,9 +795,9 @@ export const SupplierInventory: React.FC = () => {
                               <p className="text-[9px] font-black uppercase text-zinc-400 tracking-widest">Active Stock</p>
                               <p className={`font-mono font-black text-xs italic mt-1 ${
                                 product.currentStock === 0 ? "text-rose-600 animate-pulse" : 
-                                product.currentStock <= 10 ? "text-amber-500" : "text-zinc-900"
+                                convertFromSmallestUnit(product.currentStock, product.baseUnit || "Piece") <= 10 ? "text-amber-500" : "text-zinc-900"
                               }`}>
-                                {product.currentStock} units
+                                {formatStock(product.currentStock, product.measurementType, product.baseUnit)}
                               </p>
                             </div>
 
@@ -810,27 +851,31 @@ export const SupplierInventory: React.FC = () => {
                   ) : (
                     <ScrollArea className="h-[430px] pr-2">
                       <div className="space-y-4">
-                        {chronologicalHistoryLog.map((log, index) => (
-                          <div key={index} className="p-4 bg-zinc-50 border border-zinc-100 rounded-2xl flex flex-col gap-2">
-                            <div className="flex justify-between items-start gap-4">
-                              <div>
-                                <h6 className="font-black text-zinc-900 text-[11px] uppercase tracking-tight italic line-clamp-1">{log.productName}</h6>
-                                <p className="text-[8px] font-black uppercase tracking-widest text-zinc-400 mt-1">
-                                  {new Date(log.date).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                        {chronologicalHistoryLog.map((log, index) => {
+                          const prod = products.find(p => p.name.toLowerCase().trim() === log.productName.toLowerCase().trim());
+                          const formattedQuantityStr = formatStock(log.quantityAdded, prod?.measurementType, prod?.baseUnit || "Piece");
+                          return (
+                            <div key={index} className="p-4 bg-zinc-50 border border-zinc-100 rounded-2xl flex flex-col gap-2">
+                              <div className="flex justify-between items-start gap-4">
+                                <div>
+                                  <h6 className="font-black text-zinc-900 text-[11px] uppercase tracking-tight italic line-clamp-1">{log.productName}</h6>
+                                  <p className="text-[8px] font-black uppercase tracking-widest text-zinc-400 mt-1">
+                                    {new Date(log.date).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                                  </p>
+                                </div>
+                                <div className="text-right flex-shrink-0">
+                                  <p className="font-mono font-black text-xs text-zinc-900 italic">-{formatCurrency(log.totalCost, currencyValue)}</p>
+                                  <p className="text-[8px] font-black uppercase text-zinc-400 tracking-widest mt-1">+{formattedQuantityStr}</p>
+                                </div>
+                              </div>
+                              {log.notes && (
+                                <p className="text-[9px] font-medium text-zinc-500 italic border-t border-zinc-100/60 pt-2 leading-normal">
+                                  "{log.notes}"
                                 </p>
-                              </div>
-                              <div className="text-right flex-shrink-0">
-                                <p className="font-mono font-black text-xs text-zinc-900 italic">-{formatCurrency(log.totalCost, currencyValue)}</p>
-                                <p className="text-[8px] font-black uppercase text-zinc-400 tracking-widest mt-1">+{log.quantityAdded} units</p>
-                              </div>
+                              )}
                             </div>
-                            {log.notes && (
-                              <p className="text-[9px] font-medium text-zinc-500 italic border-t border-zinc-100/60 pt-2 leading-normal">
-                                "{log.notes}"
-                              </p>
-                            )}
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </ScrollArea>
                   )}
@@ -921,6 +966,9 @@ export const SupplierInventory: React.FC = () => {
                         const dateObj = move.createdAt?.toDate?.() || new Date(move.createdAt);
                         const displayDate = isNaN(dateObj.getTime()) ? "Just now" : dateObj.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
                         
+                        const prod = products.find(p => p.id === move.productId || p.name.toLowerCase().trim() === move.productName.toLowerCase().trim());
+                        const formattedQuantityStr = formatStock(move.quantity, prod?.measurementType, prod?.baseUnit || "Piece");
+
                         return (
                           <TableRow key={move.id} className="h-16 hover:bg-zinc-50/50 transition-all border-b border-zinc-50">
                             <TableCell className="px-8 font-mono text-zinc-500 text-xs">{displayDate}</TableCell>
@@ -947,7 +995,7 @@ export const SupplierInventory: React.FC = () => {
                             </TableCell>
                             <TableCell className="font-mono text-xs font-black">
                               <span className={move.direction === "in" ? "text-emerald-600" : "text-rose-600"}>
-                                {move.direction === "in" ? "+" : "-"}{move.quantity} units
+                                {move.direction === "in" ? "+" : "-"}{formattedQuantityStr}
                               </span>
                             </TableCell>
                             <TableCell className="font-semibold text-zinc-600 uppercase text-xs truncate max-w-[150px]">{move.sourceName || "Manual Adjustment"}</TableCell>
@@ -1007,20 +1055,24 @@ export const SupplierInventory: React.FC = () => {
                 {analyticsMetrics.mostProcured.length === 0 ? (
                   <p className="text-xs text-zinc-400 italic py-6 text-center">No transactions recorded yet.</p>
                 ) : (
-                  analyticsMetrics.mostProcured.map((item, i) => (
-                    <div key={i} className="space-y-1.5 p-3 bg-zinc-50 rounded-xl border border-zinc-100/60">
-                      <div className="flex justify-between text-xs font-bold text-zinc-900 uppercase">
-                        <span className="truncate pr-4">{item.name}</span>
-                        <span className="font-mono font-black text-emerald-600">+{item.qty} units</span>
+                  analyticsMetrics.mostProcured.map((item, i) => {
+                    const prod = products.find(p => p.name.toLowerCase().trim() === item.name.toLowerCase().trim());
+                    const valueStr = formatStock(item.qty, prod?.measurementType, prod?.baseUnit || "Piece");
+                    return (
+                      <div key={i} className="space-y-1.5 p-3 bg-zinc-50 rounded-xl border border-zinc-100/60">
+                        <div className="flex justify-between text-xs font-bold text-zinc-900 uppercase">
+                          <span className="truncate pr-4">{item.name}</span>
+                          <span className="font-mono font-black text-emerald-600">+{valueStr}</span>
+                        </div>
+                        <div className="h-2 w-full bg-zinc-200 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-emerald-500 rounded-full transition-all duration-500" 
+                            style={{ width: `${Math.min(100, (item.qty / Math.max(1, analyticsMetrics.mostProcured[0]?.qty || 1)) * 100)}%` }} 
+                          />
+                        </div>
                       </div>
-                      <div className="h-2 w-full bg-zinc-200 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-emerald-500 rounded-full transition-all duration-500" 
-                          style={{ width: `${Math.min(100, (item.qty / Math.max(1, analyticsMetrics.mostProcured[0]?.qty || 1)) * 100)}%` }} 
-                        />
-                      </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </Card>
@@ -1036,20 +1088,24 @@ export const SupplierInventory: React.FC = () => {
                 {analyticsMetrics.mostSold.length === 0 ? (
                   <p className="text-xs text-zinc-400 italic py-6 text-center">No delivered retail orders yet.</p>
                 ) : (
-                  analyticsMetrics.mostSold.map((item, i) => (
-                    <div key={i} className="space-y-1.5 p-3 bg-zinc-50 rounded-xl border border-zinc-100/60">
-                      <div className="flex justify-between text-xs font-bold text-zinc-900 uppercase">
-                        <span className="truncate pr-4">{item.name}</span>
-                        <span className="font-mono font-black text-blue-600">-{item.qty} units</span>
+                  analyticsMetrics.mostSold.map((item, i) => {
+                    const prod = products.find(p => p.name.toLowerCase().trim() === item.name.toLowerCase().trim());
+                    const valueStr = formatStock(item.qty, prod?.measurementType, prod?.baseUnit || "Piece");
+                    return (
+                      <div key={i} className="space-y-1.5 p-3 bg-zinc-50 rounded-xl border border-zinc-100/60">
+                        <div className="flex justify-between text-xs font-bold text-zinc-900 uppercase">
+                          <span className="truncate pr-4">{item.name}</span>
+                          <span className="font-mono font-black text-blue-600">-{valueStr}</span>
+                        </div>
+                        <div className="h-2 w-full bg-zinc-200 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-blue-500 rounded-full transition-all duration-500" 
+                            style={{ width: `${Math.min(100, (item.qty / Math.max(1, analyticsMetrics.mostSold[0]?.qty || 1)) * 100)}%` }} 
+                          />
+                        </div>
                       </div>
-                      <div className="h-2 w-full bg-zinc-200 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-blue-500 rounded-full transition-all duration-500" 
-                          style={{ width: `${Math.min(100, (item.qty / Math.max(1, analyticsMetrics.mostSold[0]?.qty || 1)) * 100)}%` }} 
-                        />
-                      </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </Card>
@@ -1072,17 +1128,22 @@ export const SupplierInventory: React.FC = () => {
                 {analyticsMetrics.fastMoving.length === 0 ? (
                   <p className="text-xs text-zinc-400 italic py-8 text-center">Insufficient sales velocity indices.</p>
                 ) : (
-                  analyticsMetrics.fastMoving.map((p, i) => (
-                    <div key={i} className="flex justify-between items-center p-4 bg-emerald-50/50 border border-emerald-100/60 rounded-2xl animate-all">
-                      <div>
-                        <p className="font-black uppercase text-xs text-zinc-950 italic">{p.name}</p>
-                        <p className="text-[8px] font-black uppercase text-zinc-400 tracking-wider mt-1">Stock Left: {p.stock} units • Delivered: {p.sold} units</p>
+                  analyticsMetrics.fastMoving.map((p, i) => {
+                    const prod = products.find(prod => prod.id === p.id);
+                    const stockDisplay = formatStock(p.stock, prod?.measurementType, prod?.baseUnit || "Piece");
+                    const soldDisplay = formatStock(p.sold, prod?.measurementType, prod?.baseUnit || "Piece");
+                    return (
+                      <div key={i} className="flex justify-between items-center p-4 bg-emerald-50/50 border border-emerald-100/60 rounded-2xl animate-all">
+                        <div>
+                          <p className="font-black uppercase text-xs text-zinc-950 italic">{p.name}</p>
+                          <p className="text-[8px] font-black uppercase text-zinc-400 tracking-wider mt-1">Stock Left: {stockDisplay} • Delivered: {soldDisplay}</p>
+                        </div>
+                        <Badge className="bg-emerald-200 text-emerald-800 hover:bg-emerald-250 border-none rounded-lg font-black text-[9px] px-3.5 py-1">
+                          HIGH VELOCITY
+                        </Badge>
                       </div>
-                      <Badge className="bg-emerald-200 text-emerald-800 hover:bg-emerald-250 border-none rounded-lg font-black text-[9px] px-3.5 py-1">
-                        HIGH VELOCITY
-                      </Badge>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </Card>
@@ -1101,17 +1162,22 @@ export const SupplierInventory: React.FC = () => {
                 {analyticsMetrics.slowMoving.length === 0 ? (
                   <p className="text-xs text-zinc-400 italic py-8 text-center">All assets are moving actively.</p>
                 ) : (
-                  analyticsMetrics.slowMoving.map((p, i) => (
-                    <div key={i} className="flex justify-between items-center p-4 bg-zinc-50 border border-zinc-100 rounded-2xl animate-all">
-                      <div>
-                        <p className="font-black uppercase text-xs text-zinc-950 italic">{p.name}</p>
-                        <p className="text-[8px] font-black uppercase text-zinc-400 tracking-wider mt-1">Current Stock: {p.stock} units • {p.sold > 0 ? `Delivered: ${p.sold} units` : "No delivered units yet"}</p>
+                  analyticsMetrics.slowMoving.map((p, i) => {
+                    const prod = products.find(prod => prod.id === p.id);
+                    const stockDisplay = formatStock(p.stock, prod?.measurementType, prod?.baseUnit || "Piece");
+                    const soldDisplay = formatStock(p.sold, prod?.measurementType, prod?.baseUnit || "Piece");
+                    return (
+                      <div key={i} className="flex justify-between items-center p-4 bg-zinc-50 border border-zinc-100 rounded-2xl animate-all">
+                        <div>
+                          <p className="font-black uppercase text-xs text-zinc-950 italic">{p.name}</p>
+                          <p className="text-[8px] font-black uppercase text-zinc-400 tracking-wider mt-1">Current Stock: {stockDisplay} • {p.sold > 0 ? `Delivered: ${soldDisplay}` : "No delivered units yet"}</p>
+                        </div>
+                        <Badge className="bg-zinc-200 text-zinc-700 hover:bg-zinc-200 border-none rounded-lg font-black text-[9px] px-3.5 py-1">
+                          LOW VELOCITY
+                        </Badge>
                       </div>
-                      <Badge className="bg-zinc-200 text-zinc-700 hover:bg-zinc-200 border-none rounded-lg font-black text-[9px] px-3.5 py-1">
-                        LOW VELOCITY
-                      </Badge>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </Card>
@@ -1139,8 +1205,8 @@ export const SupplierInventory: React.FC = () => {
                 </div>
                 <div className="bg-zinc-50 border border-zinc-100 rounded-3xl p-5 w-full md:w-auto text-center md:text-right flex-shrink-0">
                   <span className="text-[9px] font-black uppercase text-zinc-400 tracking-widest">Active Stock Counter</span>
-                  <p className="text-3xl font-black italic tracking-tighter text-zinc-900 mt-1">
-                    {selectedHistoryProduct.stock || 0} <span className="text-xs font-black uppercase tracking-widest not-italic">units</span>
+                  <p className="text-3xl font-black italic tracking-tighter text-zinc-900 mt-1 animate-pulse">
+                    {formatStock(selectedHistoryProduct.stock || 0, selectedHistoryProduct.measurementType, selectedHistoryProduct.baseUnit)}
                   </p>
                 </div>
               </div>
@@ -1148,12 +1214,16 @@ export const SupplierInventory: React.FC = () => {
               {/* Product Financials Metrics Ribbon */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="p-5 bg-zinc-50 rounded-2xl border border-zinc-100">
-                  <span className="text-[8px] font-black uppercase tracking-widest text-zinc-400">Total Procured</span>
-                  <p className="font-mono text-base font-black text-zinc-900 mt-1.5">{productStats.totalProcured} units</p>
+                  <span className="text-[8px] font-black uppercase tracking-widest text-zinc-400">Total Sourced</span>
+                  <p className="font-mono text-xs sm:text-sm font-black text-zinc-900 mt-1.5">
+                    {formatStock(productStats.totalProcured, selectedHistoryProduct.measurementType, selectedHistoryProduct.baseUnit)}
+                  </p>
                 </div>
                 <div className="p-5 bg-zinc-50 rounded-2xl border border-zinc-100">
-                  <span className="text-[8px] font-black uppercase tracking-widest text-zinc-400">Total Sold</span>
-                  <p className="font-mono text-base font-black text-zinc-900 mt-1.5">{productStats.totalSold} units</p>
+                  <span className="text-[8px] font-black uppercase tracking-widest text-zinc-400">Total Dispatched</span>
+                  <p className="font-mono text-xs sm:text-sm font-black text-zinc-900 mt-1.5">
+                    {formatStock(productStats.totalSold, selectedHistoryProduct.measurementType, selectedHistoryProduct.baseUnit)}
+                  </p>
                 </div>
                 <div className="p-5 bg-zinc-50 rounded-2xl border border-zinc-100">
                   <span className="text-[8px] font-black uppercase tracking-widest text-zinc-400">Avg Cost Price</span>
@@ -1202,7 +1272,7 @@ export const SupplierInventory: React.FC = () => {
                       <div className="h-9 w-9 bg-emerald-500 rounded-xl flex items-center justify-center text-zinc-950 font-black text-xs mb-3 shadow-md"><Plus className="h-4.5 w-4.5" /></div>
                       <p className="text-[9px] font-black tracking-wider uppercase text-zinc-400">3. Active Storage</p>
                       <p className="text-[11px] font-black uppercase italic tracking-tight text-white mt-1.5">Main Warehouse</p>
-                      <p className="text-[8px] font-mono text-zinc-500 mt-1">{selectedHistoryProduct.stock || 0} Units In Store</p>
+                      <p className="text-[8px] font-mono text-zinc-500 mt-1">{formatStock(selectedHistoryProduct.stock || 0, selectedHistoryProduct.measurementType, selectedHistoryProduct.baseUnit)} In Store</p>
                     </div>
 
                     <div className="flex items-center justify-center text-zinc-700 font-black"><ArrowRight className="h-5 w-5 rotate-90 md:rotate-0" /></div>
@@ -1261,7 +1331,7 @@ export const SupplierInventory: React.FC = () => {
                                 </div>
                                 
                                 <p className="text-[11px] font-semibold text-zinc-650 mt-1.5 leading-relaxed">
-                                  {move.notes || `${move.direction === "in" ? "Added" : "Deducted"} ${move.quantity} units.`}
+                                  {move.notes || `${move.direction === "in" ? "Added" : "Deducted"} ${formatStock(move.quantity, selectedHistoryProduct.measurementType, selectedHistoryProduct.baseUnit)}.`}
                                 </p>
                                 
                                 <p className="text-[8px] font-black uppercase tracking-widest text-zinc-400 mt-1">
@@ -1271,7 +1341,7 @@ export const SupplierInventory: React.FC = () => {
 
                               <div className="text-right">
                                 <span className={`font-mono text-sm font-black italic ${move.direction === "in" ? "text-emerald-600" : "text-rose-600"}`}>
-                                  {move.direction === "in" ? "+" : "-"}{move.quantity}
+                                  {move.direction === "in" ? "+" : "-"}{formatStock(move.quantity, selectedHistoryProduct.measurementType, selectedHistoryProduct.baseUnit)}
                                 </span>
                                 <p className="text-[8px] font-semibold text-zinc-400">{displayDate}</p>
                               </div>
@@ -1315,19 +1385,34 @@ export const SupplierInventory: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-1">Quantity to Inject</Label>
-                  <Input 
-                    required
-                    type="number"
-                    min="1"
-                    placeholder="0"
-                    value={restockQty}
-                    onChange={(e) => setRestockQty(e.target.value)}
-                    className="h-14 rounded-2xl bg-zinc-50 border-none font-black text-xs text-center"
-                  />
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-1">Quantity/Unit</Label>
+                  <div className="flex gap-2">
+                    <Input 
+                      required
+                      type="number"
+                      step="any"
+                      min="0.001"
+                      placeholder="e.g. 1.25"
+                      value={restockQty}
+                      onChange={(e) => setRestockQty(e.target.value)}
+                      className="h-14 flex-1 rounded-2xl bg-zinc-50 border-none font-black text-xs text-center px-2"
+                    />
+                    <Select value={restockUnit} onValueChange={setRestockUnit}>
+                      <SelectTrigger className="w-[100px] h-14 bg-zinc-50 border-none rounded-2xl font-bold uppercase text-[10px]">
+                        <SelectValue placeholder="Unit" />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-2xl border-none shadow-2xl">
+                        {compatibleUnits.map(unit => (
+                          <SelectItem key={unit.name} value={unit.name} className="font-bold uppercase text-[10px]">
+                            {unit.abbreviation}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-455 ml-1">Unit Investment Cost ({currencyValue})</Label>
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-455 ml-1">Unit Cost ({currencyValue})</Label>
                   <Input 
                     required
                     type="number"
@@ -1351,11 +1436,11 @@ export const SupplierInventory: React.FC = () => {
                 />
               </div>
 
-              {restockQty && unitCostInput && !isNaN(parseInt(restockQty)) && !isNaN(parseFloat(unitCostInput)) && (
+              {restockQty && unitCostInput && !isNaN(parseFloat(restockQty)) && !isNaN(parseFloat(unitCostInput)) && (
                 <div className="p-5 bg-zinc-900 rounded-3xl text-white flex justify-between items-center">
                   <span className="text-[10px] font-black uppercase tracking-widest">Calculated Capital Outlay</span>
                   <span className="font-mono text-xl font-black italic tracking-tighter">
-                    -{formatCurrency(parseInt(restockQty) * parseFloat(unitCostInput), currencyValue)}
+                    -{formatCurrency(parseFloat(restockQty) * parseFloat(unitCostInput), currencyValue)}
                   </span>
                 </div>
               )}

@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Trash2, Package, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
+import { UNIT_DEFINITIONS, formatStock, convertToSmallestUnit, convertFromSmallestUnit, findUnitDefinition } from "@/lib/measurements";
 
 interface NewOrderDialogProps {
   isOpen: boolean;
@@ -36,8 +37,8 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
   onSubmit 
 }) => {
   const { preferredCurrency } = useAuth();
-  const [orderItems, setOrderItems] = useState<(OrderItem & { productId?: string })[]>([
-    { productId: "", name: "", quantity: 1, price: 0 }
+  const [orderItems, setOrderItems] = useState<(OrderItem & { productId?: string; selectedUnit?: string; displayQuantity?: number })[]>([
+    { productId: "", name: "", quantity: 1, price: 0, selectedUnit: "Piece", displayQuantity: 1 }
   ]);
   const [selectedRetailerId, setSelectedRetailerId] = useState("");
   const [assignedEmployeeId, setAssignedEmployeeId] = useState("");
@@ -52,14 +53,23 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
   // Clean reset when modal re-opens
   useEffect(() => {
     if (isOpen) {
-      setOrderItems([{ productId: "", name: "", quantity: 1, price: 0 }]);
+      setOrderItems([{ productId: "", name: "", quantity: 1, price: 0, selectedUnit: "Piece", displayQuantity: 1 }]);
       setSelectedRetailerId("");
       setAssignedEmployeeId("");
       setDeliveryDate(new Date().toISOString().split('T')[0]);
     }
   }, [isOpen]);
 
-  const grandTotal = orderItems.reduce((sum, item) => sum + (item.quantity * item.price), 0);
+  const grandTotal = orderItems.reduce((sum, item) => {
+    if (!item.productId) return sum;
+    const prod = products.find(p => p.id === item.productId);
+    const baseUnitDef = findUnitDefinition(prod?.baseUnit || "Piece");
+    const orderedUnitDef = findUnitDefinition(item.selectedUnit || "Piece");
+    const multiplierRatio = orderedUnitDef.multiplier / baseUnitDef.multiplier;
+    const linePrice = (item.displayQuantity ?? item.quantity) * multiplierRatio * item.price;
+    return sum + linePrice;
+  }, 0);
+
   const currentSymbol = getCurrencySymbol(currency);
 
   const getProductStockStatus = (prodId: string, currentIndex: number) => {
@@ -90,7 +100,7 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
         return;
       }
     }
-    setOrderItems([...orderItems, { productId: "", name: "", quantity: 1, price: 0 }]);
+    setOrderItems([...orderItems, { productId: "", name: "", quantity: 1, price: 0, selectedUnit: "Piece", displayQuantity: 1 }]);
   };
 
   const removeOrderItem = (index: number) => {
@@ -99,7 +109,7 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
     }
   };
 
-  const updateOrderItem = (index: number, updates: Partial<OrderItem & { productId?: string }>) => {
+  const updateOrderItem = (index: number, updates: Partial<OrderItem & { productId?: string; selectedUnit?: string; displayQuantity?: number }>) => {
     setOrderItems(prev => {
       const newItems = [...prev];
       newItems[index] = { ...newItems[index], ...updates };
@@ -133,7 +143,9 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
       if (matched) {
         const stock = typeof matched.stock === "number" ? matched.stock : 0;
         if (item.quantity > stock) {
-          toast.error(`Deficit: Only ${stock} units of "${matched.name}" available in stock (Requested: ${item.quantity}). Please restock before organizing this shipment.`);
+          const formattedStock = formatStock(stock, matched.measurementType, matched.baseUnit);
+          const formattedReqQuantity = formatStock(item.quantity, matched.measurementType, matched.baseUnit);
+          toast.error(`Deficit: Only ${formattedStock} of "${matched.name}" available in stock (Requested: ${formattedReqQuantity}). Please restock before organizing this shipment.`);
           return;
         }
       } else {
@@ -145,10 +157,12 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
     setIsSubmitting(true);
     try {
       // Remove local productId before submitting items to backend service
-      const cleanItems: OrderItem[] = orderItems.map(({ name, quantity, price }) => ({
+      const cleanItems: any[] = orderItems.map(({ name, quantity, price, selectedUnit, displayQuantity }) => ({
         name,
-        quantity,
-        price
+        quantity, // smallest units for backend stock deduction
+        price,
+        unit: selectedUnit || "Piece",
+        displayQty: displayQuantity ?? quantity
       }));
 
       await onSubmit({
@@ -160,7 +174,7 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
         currency
       });
       // Reset
-      setOrderItems([{ productId: "", name: "", quantity: 1, price: 0 }]);
+      setOrderItems([{ productId: "", name: "", quantity: 1, price: 0, selectedUnit: "Piece", displayQuantity: 1 }]);
       setSelectedRetailerId("");
       setAssignedEmployeeId("");
       setDeliveryDate(new Date().toISOString().split('T')[0]);
@@ -248,263 +262,395 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
                 <Table>
                   <TableHeader className="bg-zinc-50">
                     <TableRow className="h-12 border-none">
-                      <TableHead className="w-[40%] text-[9px] font-black uppercase tracking-widest px-6">Product Designation</TableHead>
-                      <TableHead className="text-[9px] font-black uppercase tracking-widest">Qty</TableHead>
-                      <TableHead className="text-[9px] font-black uppercase tracking-widest">Unit Price</TableHead>
-                      <TableHead className="text-[9px] font-black uppercase tracking-widest">Calculated</TableHead>
+                      <TableHead className="w-[35%] text-[9px] font-black uppercase tracking-widest px-6">Product Designation</TableHead>
+                      <TableHead className="w-[18%] text-[9px] font-black uppercase tracking-widest">Qty</TableHead>
+                      <TableHead className="w-[18%] text-[9px] font-black uppercase tracking-widest">Unit</TableHead>
+                      <TableHead className="w-[14%] text-[9px] font-black uppercase tracking-widest">Unit Price</TableHead>
+                      <TableHead className="w-[15%] text-[9px] font-black uppercase tracking-widest">Calculated</TableHead>
                       <TableHead className="w-[50px]"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {orderItems.map((item, index) => (
-                       <TableRow key={index} className="h-16 border-b border-zinc-50 group">
-                        <TableCell className="px-4 py-3">
-                          <div className="flex flex-col gap-2 min-w-[200px]">
+                    {orderItems.map((item, index) => {
+                      const selectedProd = products.find(p => p.id === item.productId);
+                      const normMType = selectedProd 
+                        ? (selectedProd.measurementType === "Weight Based" || selectedProd.measurementType === "weight" ? "weight" : selectedProd.measurementType === "Volume Based" || selectedProd.measurementType === "volume" ? "volume" : "count")
+                        : "count";
+                      const compatibleUnits = UNIT_DEFINITIONS.filter(u => u.type === normMType);
+                      const baseUnitDef = findUnitDefinition(selectedProd?.baseUnit || "Piece");
+                      const orderedUnitDef = findUnitDefinition(item.selectedUnit || "Piece");
+                      const multiplierRatio = orderedUnitDef.multiplier / baseUnitDef.multiplier;
+                      const linePrice = (item.displayQuantity ?? item.quantity) * multiplierRatio * item.price;
+
+                      return (
+                        <TableRow key={index} className="h-16 border-b border-zinc-50 group">
+                          <TableCell className="px-4 py-3">
+                            <div className="flex flex-col gap-2 min-w-[180px]">
+                              <Select
+                                value={item.productId || ""}
+                                onValueChange={(val) => {
+                                  const prod = products.find(p => p.id === val);
+                                  if (prod) {
+                                    const defaultUnit = prod.baseUnit || "Piece";
+                                    updateOrderItem(index, {
+                                      productId: prod.id,
+                                      name: prod.name,
+                                      price: prod.price,
+                                      selectedUnit: defaultUnit,
+                                      displayQuantity: 1,
+                                      quantity: convertToSmallestUnit(1, defaultUnit)
+                                    });
+                                  }
+                                }}
+                              >
+                                <SelectTrigger className="h-10 rounded-xl border-zinc-100 bg-zinc-50 font-bold uppercase text-xs italic">
+                                  {item.name ? (
+                                    <span className="truncate">{item.name}</span>
+                                  ) : (
+                                    <SelectValue placeholder="Identify product catalog..." />
+                                  )}
+                                </SelectTrigger>
+                                <SelectContent className="rounded-xl border-none shadow-2xl">
+                                  {products.map(p => {
+                                    const { remaining } = getProductStockStatus(p.id, index);
+                                    const isAlreadySelected = orderItems.some((ot, idx) => idx !== index && ot.productId === p.id);
+                                    const isDisabled = (remaining <= 0 || isAlreadySelected) && item.productId !== p.id;
+                                    const formattedRemaining = formatStock(remaining, p.measurementType, p.baseUnit);
+                                    return (
+                                      <SelectItem 
+                                        key={p.id} 
+                                        value={p.id} 
+                                        disabled={isDisabled}
+                                        className={`font-bold uppercase text-[10px] tracking-widest mb-1 ${isDisabled ? "opacity-40 cursor-not-allowed" : ""}`}
+                                      >
+                                        {p.name} {isAlreadySelected ? "(Already Selected)" : `(Remaining: ${formattedRemaining})`}
+                                      </SelectItem>
+                                    );
+                                  })}
+                                </SelectContent>
+                              </Select>
+   
+                              {/* Show inventory indicator & warnings if matched */}
+                              {(() => {
+                                const matched = products.find(p => p.name.toLowerCase() === item.name.toLowerCase());
+                                if (matched) {
+                                  const { remaining } = getProductStockStatus(matched.id, index);
+                                  const formattedStock = formatStock(remaining, matched.measurementType, matched.baseUnit);
+                                  const isDeficit = item.quantity > remaining;
+                                  return (
+                                    <div className="flex items-center gap-1.5 ml-1">
+                                      <span className={`text-[9px] font-black uppercase tracking-wider ${isDeficit ? "text-rose-600 animate-pulse" : "text-emerald-600"}`}>
+                                        {isDeficit ? "Exceeds Allocated Buffer Stock!" : `Live Stock Buffer: ${formattedStock}`}
+                                      </span>
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              })()}
+                            </div>
+                          </TableCell>
+                          <TableCell className="px-2">
+                            {(() => {
+                              const { remaining } = getProductStockStatus(item.productId || "", index);
+                              const orderedUnitDef = findUnitDefinition(item.selectedUnit || "Piece");
+                              const allowedDisplay = convertFromSmallestUnit(remaining, orderedUnitDef.name);
+                              return (
+                                <Input 
+                                  type="number" 
+                                  step="any"
+                                  min="0.001"
+                                  placeholder="0"
+                                  value={item.displayQuantity ?? item.quantity}
+                                  onChange={(e) => {
+                                    const rawVal = parseFloat(e.target.value);
+                                    const val = isNaN(rawVal) || rawVal <= 0 ? 0 : rawVal;
+                                    const compSmall = convertToSmallestUnit(val, item.selectedUnit || "Piece");
+                                    
+                                    if (compSmall > remaining) {
+                                      toast.error(`Exceeded available stock! Max allowed: ${allowedDisplay} ${item.selectedUnit}`);
+                                      updateOrderItem(index, { 
+                                        displayQuantity: allowedDisplay,
+                                        quantity: remaining
+                                      });
+                                    } else {
+                                      updateOrderItem(index, { 
+                                        displayQuantity: val,
+                                        quantity: compSmall
+                                      });
+                                    }
+                                  }}
+                                  className="h-10 w-24 rounded-xl border-zinc-100 bg-zinc-50 font-black text-xs text-center"
+                                  required
+                                  disabled={!item.productId}
+                                />
+                              );
+                            })()}
+                          </TableCell>
+                          <TableCell className="px-2">
                             <Select
-                              value={item.productId || ""}
-                              onValueChange={(val) => {
-                                const prod = products.find(p => p.id === val);
-                                if (prod) {
+                              value={item.selectedUnit || "Piece"}
+                              onValueChange={(newUnit) => {
+                                const currentDisp = item.displayQuantity ?? 1;
+                                const compSmall = convertToSmallestUnit(currentDisp, newUnit);
+                                const { remaining } = getProductStockStatus(item.productId || "", index);
+                                
+                                if (compSmall > remaining) {
+                                  const allowedDisplay = convertFromSmallestUnit(remaining, newUnit);
+                                  toast.error(`Exceeded available stock! Max allowed: ${allowedDisplay} ${newUnit}`);
                                   updateOrderItem(index, {
-                                    productId: prod.id,
-                                    name: prod.name,
-                                    price: prod.price
+                                    selectedUnit: newUnit,
+                                    displayQuantity: allowedDisplay,
+                                    quantity: remaining
+                                  });
+                                } else {
+                                  updateOrderItem(index, {
+                                    selectedUnit: newUnit,
+                                    quantity: compSmall
                                   });
                                 }
                               }}
+                              disabled={!item.productId}
                             >
                               <SelectTrigger className="h-10 rounded-xl border-zinc-100 bg-zinc-50 font-bold uppercase text-xs italic">
-                                {item.name ? (
-                                  <span className="truncate">{item.name}</span>
-                                ) : (
-                                  <SelectValue placeholder="Identify product catalog..." />
-                                )}
+                                <SelectValue />
                               </SelectTrigger>
                               <SelectContent className="rounded-xl border-none shadow-2xl">
-                                {products.map(p => {
-                                  const { remaining } = getProductStockStatus(p.id, index);
-                                  const isAlreadySelected = orderItems.some((ot, idx) => idx !== index && ot.productId === p.id);
-                                  const isDisabled = (remaining <= 0 || isAlreadySelected) && item.productId !== p.id;
-                                  return (
-                                    <SelectItem 
-                                      key={p.id} 
-                                      value={p.id} 
-                                      disabled={isDisabled}
-                                      className={`font-bold uppercase text-[10px] tracking-widest mb-1 ${isDisabled ? "opacity-40 cursor-not-allowed" : ""}`}
-                                    >
-                                      {p.name} {isAlreadySelected ? "(Already Selected)" : `(Remaining Stock: ${remaining})`}
-                                    </SelectItem>
-                                  );
-                                })}
+                                {compatibleUnits.map(unit => (
+                                  <SelectItem key={unit.name} value={unit.name} className="font-bold uppercase text-[9px] tracking-widest py-2">
+                                    {unit.name} ({unit.abbreviation})
+                                  </SelectItem>
+                                ))}
                               </SelectContent>
                             </Select>
- 
-                            {/* Show inventory indicator & warnings if matched */}
-                            {(() => {
-                              const matched = products.find(p => p.name.toLowerCase() === item.name.toLowerCase());
-                              if (matched) {
-                                const stock = typeof matched.stock === "number" ? matched.stock : 0;
-                                const tooLow = item.quantity > stock;
-                                return (
-                                  <div className="flex items-center gap-1.5 ml-1">
-                                    <span className={`text-[9px] font-black uppercase tracking-wider ${tooLow ? "text-rose-600 animate-pulse" : "text-emerald-600"}`}>
-                                      {tooLow ? `Deficit: ${item.quantity - stock} units short! (Stock: ${stock})` : `In Stock: ${stock} available`}
-                                    </span>
-                                  </div>
-                                );
-                              }
-                              return null;
-                            })()}
-                          </div>
-                        </TableCell>
-                        <TableCell className="px-2">
-                          {(() => {
-                            const { remaining } = getProductStockStatus(item.productId || "", index);
-                            const maxLimit = item.productId ? remaining : 999999;
-                            return (
-                              <Input 
-                                type="number" 
-                                min="1"
-                                max={maxLimit}
-                                value={item.quantity}
-                                onChange={(e) => {
-                                  let val = parseInt(e.target.value);
-                                  if (isNaN(val) || val < 1) {
-                                    val = 1;
-                                  }
-                                  const clamped = Math.min(val, maxLimit);
-                                  updateOrderItem(index, { quantity: clamped });
-                                  if (val > maxLimit) {
-                                    toast.error(`Exceeded available stock! Max units allowed for this product: ${maxLimit}`);
-                                  }
-                                }}
-                                className="h-10 w-16 rounded-xl border-zinc-100 bg-zinc-50 font-black text-xs text-center"
-                                required
-                              />
-                            );
-                          })()}
-                        </TableCell>
-                        <TableCell className="px-2">
-                          <Input 
-                            type="number" 
-                            step="0.01" 
-                            min="0.00"
-                            value={item.price}
-                            readOnly
-                            disabled
-                            className="h-10 w-24 rounded-xl border-zinc-100 bg-zinc-100 font-black text-xs text-center text-zinc-500 cursor-not-allowed"
-                            required
-                          />
-                        </TableCell>
-                        <TableCell className="px-2 font-black italic tracking-tighter text-zinc-900">
-                          {currentSymbol}{(item.quantity * item.price).toFixed(2)}
-                        </TableCell>
-                        <TableCell className="px-4">
-                          <Button 
-                            type="button" 
-                            variant="ghost" 
-                            size="icon" 
-                            onClick={() => removeOrderItem(index)}
-                            disabled={orderItems.length === 1}
-                            className="h-8 w-8 rounded-lg text-zinc-300 hover:text-rose-500 hover:bg-rose-50"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                          </TableCell>
+                          <TableCell className="px-2">
+                            <Input 
+                              type="number" 
+                              step="any" 
+                              value={item.price}
+                              readOnly
+                              disabled
+                              className="h-10 w-20 rounded-xl border-zinc-100 bg-zinc-100 font-black text-xs text-center text-zinc-500 cursor-not-allowed"
+                              required
+                            />
+                          </TableCell>
+                          <TableCell className="px-2 font-black italic tracking-tighter text-zinc-900 text-sm">
+                            {currentSymbol}{linePrice.toFixed(2)}
+                          </TableCell>
+                          <TableCell className="px-4">
+                            <Button 
+                              type="button" 
+                              variant="ghost" 
+                              size="icon" 
+                              onClick={() => removeOrderItem(index)}
+                              disabled={orderItems.length === 1}
+                              className="h-8 w-8 rounded-lg text-zinc-300 hover:text-rose-500 hover:bg-rose-50"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>
  
               {/* Mobile Card Stack View: visible below md */}
               <div className="block md:hidden space-y-4">
-                {orderItems.map((item, index) => (
-                  <div key={index} className="border border-zinc-100 rounded-2xl p-4 bg-zinc-50/50 space-y-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[9px] font-black uppercase tracking-wider text-zinc-400 italic">Component #{index + 1}</span>
-                      <Button 
-                        type="button" 
-                        variant="ghost" 
-                        size="icon" 
-                        onClick={() => removeOrderItem(index)}
-                        disabled={orderItems.length === 1}
-                        className="h-8 w-8 rounded-lg text-zinc-300 hover:text-rose-500 hover:bg-rose-50 disabled:opacity-30"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
+                {orderItems.map((item, index) => {
+                  const selectedProd = products.find(p => p.id === item.productId);
+                  const normMType = selectedProd 
+                    ? (selectedProd.measurementType === "Weight Based" || selectedProd.measurementType === "weight" ? "weight" : selectedProd.measurementType === "Volume Based" || selectedProd.measurementType === "volume" ? "volume" : "count")
+                    : "count";
+                  const compatibleUnits = UNIT_DEFINITIONS.filter(u => u.type === normMType);
+                  const baseUnitDef = findUnitDefinition(selectedProd?.baseUnit || "Piece");
+                  const orderedUnitDef = findUnitDefinition(item.selectedUnit || "Piece");
+                  const multiplierRatio = orderedUnitDef.multiplier / baseUnitDef.multiplier;
+                  const linePrice = (item.displayQuantity ?? item.quantity) * multiplierRatio * item.price;
+
+                  return (
+                    <div key={index} className="border border-zinc-100 rounded-2xl p-4 bg-zinc-50/50 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] font-black uppercase tracking-wider text-zinc-400 italic">Component #{index + 1}</span>
+                        <Button 
+                          type="button" 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={() => removeOrderItem(index)}
+                          disabled={orderItems.length === 1}
+                          className="h-8 w-8 rounded-lg text-zinc-300 hover:text-rose-500 hover:bg-rose-50 disabled:opacity-30"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
  
-                    <div className="space-y-1">
-                      <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Product Designation</Label>
-                      <Select
-                        value={item.productId || ""}
-                        onValueChange={(val) => {
-                          const prod = products.find(p => p.id === val);
-                          if (prod) {
-                            updateOrderItem(index, {
-                              productId: prod.id,
-                              name: prod.name,
-                              price: prod.price
-                            });
-                          }
-                        }}
-                      >
-                        <SelectTrigger className="h-11 rounded-xl border-zinc-100 bg-white font-bold uppercase text-xs italic">
-                          {item.name ? (
-                            <span className="truncate">{item.name}</span>
-                          ) : (
-                            <SelectValue placeholder="Identify catalog..." />
-                          )}
-                        </SelectTrigger>
-                        <SelectContent className="rounded-xl border-none shadow-2xl">
-                          {products.map(p => {
-                            const { remaining } = getProductStockStatus(p.id, index);
-                            const isAlreadySelected = orderItems.some((ot, idx) => idx !== index && ot.productId === p.id);
-                            const isDisabled = (remaining <= 0 || isAlreadySelected) && item.productId !== p.id;
-                            return (
-                              <SelectItem 
-                                key={p.id} 
-                                value={p.id} 
-                                disabled={isDisabled}
-                                className={`font-bold uppercase text-[10px] tracking-widest mb-1 ${isDisabled ? "opacity-40 cursor-not-allowed" : ""}`}
-                              >
-                                {p.name} {isAlreadySelected ? "(Already Selected)" : `(Remaining Stock: ${remaining})`}
-                              </SelectItem>
-                            );
-                          })}
-                        </SelectContent>
-                      </Select>
-                      
-                      {/* Show inventory indicator & warnings if matched */}
-                      {(() => {
-                        const matched = products.find(p => p.name.toLowerCase() === item.name.toLowerCase());
-                        if (matched) {
-                          const stock = typeof matched.stock === "number" ? matched.stock : 0;
-                          const tooLow = item.quantity > stock;
-                          return (
-                            <div className="flex items-center gap-1.5 pt-1">
-                              <span className={`text-[9px] font-black uppercase tracking-wider ${tooLow ? "text-rose-600 animate-pulse" : "text-emerald-600"}`}>
-                                {tooLow ? `Deficit: ${item.quantity - stock} units short! (Stock: ${stock})` : `In Stock: ${stock} available`}
-                              </span>
-                            </div>
-                          );
-                        }
-                        return null;
-                      })()}
-                    </div>
- 
-                    <div className="grid grid-cols-3 gap-3">
                       <div className="space-y-1">
-                        <Label className="text-[9px] font-black uppercase text-zinc-500">Qty</Label>
+                        <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Product Designation</Label>
+                        <Select
+                          value={item.productId || ""}
+                          onValueChange={(val) => {
+                            const prod = products.find(p => p.id === val);
+                            if (prod) {
+                              const defaultUnit = prod.baseUnit || "Piece";
+                              updateOrderItem(index, {
+                                productId: prod.id,
+                                name: prod.name,
+                                price: prod.price,
+                                selectedUnit: defaultUnit,
+                                displayQuantity: 1,
+                                quantity: convertToSmallestUnit(1, defaultUnit)
+                              });
+                            }
+                          }}
+                        >
+                          <SelectTrigger className="h-11 rounded-xl border-zinc-100 bg-white font-bold uppercase text-xs italic">
+                            {item.name ? (
+                              <span className="truncate">{item.name}</span>
+                            ) : (
+                              <SelectValue placeholder="Identify catalog..." />
+                            )}
+                          </SelectTrigger>
+                          <SelectContent className="rounded-xl border-none shadow-2xl">
+                            {products.map(p => {
+                              const { remaining } = getProductStockStatus(p.id, index);
+                              const isAlreadySelected = orderItems.some((ot, idx) => idx !== index && ot.productId === p.id);
+                              const isDisabled = (remaining <= 0 || isAlreadySelected) && item.productId !== p.id;
+                              const formattedRemaining = formatStock(remaining, p.measurementType, p.baseUnit);
+                              return (
+                                <SelectItem 
+                                  key={p.id} 
+                                  value={p.id} 
+                                  disabled={isDisabled}
+                                  className={`font-bold uppercase text-[10px] tracking-widest mb-1 ${isDisabled ? "opacity-40 cursor-not-allowed" : ""}`}
+                                >
+                                  {p.name} {isAlreadySelected ? "(Already Selected)" : `(Remaining: ${formattedRemaining})`}
+                                </SelectItem>
+                              );
+                            })}
+                          </SelectContent>
+                        </Select>
+                        
+                        {/* Show inventory indicator & warnings if matched */}
                         {(() => {
-                          const { remaining } = getProductStockStatus(item.productId || "", index);
-                          const maxLimit = item.productId ? remaining : 999999;
-                          return (
-                            <Input 
-                              type="number" 
-                              min="1"
-                              max={maxLimit}
-                              value={item.quantity}
-                              onChange={(e) => {
-                                let val = parseInt(e.target.value);
-                                if (isNaN(val) || val < 1) {
-                                  val = 1;
-                                  }
-                                const clamped = Math.min(val, maxLimit);
-                                updateOrderItem(index, { quantity: clamped });
-                                if (val > maxLimit) {
-                                  toast.error(`Exceeded available stock! Max units allowed for this product: ${maxLimit}`);
-                                }
-                              }}
-                              className="h-10 rounded-xl border-zinc-100 bg-white font-black text-xs text-center"
-                              required
-                            />
-                          );
+                          const matched = products.find(p => p.name.toLowerCase() === item.name.toLowerCase());
+                          if (matched) {
+                            const { remaining } = getProductStockStatus(matched.id, index);
+                            const formattedStock = formatStock(remaining, matched.measurementType, matched.baseUnit);
+                            const isDeficit = item.quantity > remaining;
+                            return (
+                              <div className="flex items-center gap-1.5 pt-1">
+                                <span className={`text-[9px] font-black uppercase tracking-wider ${isDeficit ? "text-rose-600 animate-pulse" : "text-emerald-600"}`}>
+                                  {isDeficit ? "Exceeds Stock Matrix Capacity!" : `Stock Buffer: ${formattedStock}`}
+                                </span>
+                              </div>
+                            );
+                          }
+                          return null;
                         })()}
                       </div>
-                      <div className="space-y-1">
-                        <Label className="text-[9px] font-black uppercase text-zinc-500">Unit Price</Label>
-                        <Input 
-                          type="number" 
-                          step="0.01" 
-                          min="0.00"
-                          value={item.price}
-                          readOnly
-                          disabled
-                          className="h-10 rounded-xl border-zinc-100 bg-zinc-100 font-black text-xs text-center text-zinc-500 cursor-not-allowed"
-                          required
-                        />
+ 
+                      <div className="grid grid-cols-4 gap-2">
+                        <div className="space-y-1 col-span-2">
+                          <Label className="text-[9px] font-black uppercase text-zinc-500">Qty</Label>
+                          {(() => {
+                            const { remaining } = getProductStockStatus(item.productId || "", index);
+                            const orderedUnitDef = findUnitDefinition(item.selectedUnit || "Piece");
+                            const allowedDisplay = convertFromSmallestUnit(remaining, orderedUnitDef.name);
+                            return (
+                              <Input 
+                                type="number" 
+                                step="any"
+                                min="0.001"
+                                value={item.displayQuantity ?? item.quantity}
+                                onChange={(e) => {
+                                  const rawVal = parseFloat(e.target.value);
+                                  const val = isNaN(rawVal) || rawVal <= 0 ? 0 : rawVal;
+                                  const compSmall = convertToSmallestUnit(val, item.selectedUnit || "Piece");
+                                  
+                                  if (compSmall > remaining) {
+                                    toast.error(`Exceeded stock! Max allowed: ${allowedDisplay} ${item.selectedUnit}`);
+                                    updateOrderItem(index, { 
+                                      displayQuantity: allowedDisplay,
+                                      quantity: remaining
+                                    });
+                                  } else {
+                                    updateOrderItem(index, { 
+                                      displayQuantity: val,
+                                      quantity: compSmall
+                                    });
+                                  }
+                                }}
+                                className="h-10 rounded-xl border-zinc-100 bg-white font-black text-xs text-center"
+                                required
+                                disabled={!item.productId}
+                              />
+                            );
+                          })()}
+                        </div>
+                        <div className="space-y-1 col-span-2">
+                          <Label className="text-[9px] font-black uppercase text-zinc-500">Unit</Label>
+                          <Select
+                            value={item.selectedUnit || "Piece"}
+                            onValueChange={(newUnit) => {
+                              const currentDisp = item.displayQuantity ?? 1;
+                              const compSmall = convertToSmallestUnit(currentDisp, newUnit);
+                              const { remaining } = getProductStockStatus(item.productId || "", index);
+                              
+                              if (compSmall > remaining) {
+                                const allowedDisplay = convertFromSmallestUnit(remaining, newUnit);
+                                toast.error(`Exceeded stock! Max: ${allowedDisplay} ${newUnit}`);
+                                updateOrderItem(index, {
+                                  selectedUnit: newUnit,
+                                  displayQuantity: allowedDisplay,
+                                  quantity: remaining
+                                });
+                              } else {
+                                updateOrderItem(index, {
+                                  selectedUnit: newUnit,
+                                  quantity: compSmall
+                                });
+                              }
+                            }}
+                            disabled={!item.productId}
+                          >
+                            <SelectTrigger className="h-10 rounded-xl border-zinc-100 bg-white font-bold uppercase text-[10px] italic">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-xl border-none shadow-2xl">
+                              {compatibleUnits.map(unit => (
+                                <SelectItem key={unit.name} value={unit.name} className="font-bold uppercase text-[9px] tracking-widest py-2">
+                                  {unit.name} ({unit.abbreviation})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </div>
-                      <div className="space-y-1 text-center">
-                        <Label className="text-[9px] font-black uppercase text-zinc-500 block">Calculated</Label>
-                        <div className="h-10 flex items-center justify-center font-black italic text-xs text-zinc-900 bg-white border border-zinc-100 rounded-xl">
-                          {currentSymbol}{(item.quantity * item.price).toFixed(2)}
+
+                      <div className="grid grid-cols-2 gap-3 pt-2 border-t border-zinc-100/50">
+                        <div className="space-y-1">
+                          <Label className="text-[9px] font-black uppercase text-zinc-500">Unit Price</Label>
+                          <Input 
+                            type="number" 
+                            step="any" 
+                            value={item.price}
+                            readOnly
+                            disabled
+                            className="h-10 rounded-xl border-zinc-100 bg-zinc-100 font-black text-xs text-center text-zinc-500 cursor-not-allowed"
+                            required
+                          />
+                        </div>
+                        <div className="space-y-1 text-center">
+                          <Label className="text-[9px] font-black uppercase text-zinc-500 block">Calculated</Label>
+                          <div className="h-10 flex items-center justify-center font-black italic text-xs text-zinc-900 bg-white border border-zinc-100 rounded-xl">
+                            {currentSymbol}{linePrice.toFixed(2)}
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 

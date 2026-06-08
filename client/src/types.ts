@@ -39,9 +39,13 @@ export interface Invite {
 }
 
 export interface OrderItem {
+  id?: string;
+  productId?: string;
   name: string;
   quantity: number;
   price: number;
+  selectedUnit?: string;
+  displayQuantity?: number;
 }
 
 export interface Order {
@@ -76,6 +80,9 @@ export interface Product {
   stock?: number;
   unitCost?: number;
   status?: "active" | "hidden";
+  measurementType?: string;
+  baseUnit?: string;
+  pricePerUnit?: number;
   restockHistory?: Array<{
     quantityAdded: number;
     unitCost: number;

@@ -18,6 +18,8 @@ import { Search, Plus, Package, Edit2, Trash2, Image as ImageIcon, Loader2, Shop
 import { toast } from "sonner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
+import { UNIT_DEFINITIONS, convertToSmallestUnit, formatStock } from "@/lib/measurements";
+
 interface SupplierProductsProps {
   orders: Order[];
   employees: SystemUser[];
@@ -52,11 +54,24 @@ export const SupplierProducts: React.FC<SupplierProductsProps> = ({
   const [status, setStatus] = useState<"active" | "hidden">("active");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // New product measurement architecture fields
+  const [measurementType, setMeasurementType] = useState<"count" | "weight" | "volume">("count");
+  const [baseUnit, setBaseUnit] = useState("Piece");
+
   useEffect(() => {
     if (preferredCurrency && !editingProduct) {
       setCurrency(preferredCurrency);
     }
   }, [preferredCurrency, editingProduct]);
+
+  useEffect(() => {
+    if (!editingProduct) {
+      const firstUnit = UNIT_DEFINITIONS.find(u => u.type === measurementType && u.multiplier === 1);
+      if (firstUnit) {
+        setBaseUnit(firstUnit.name);
+      }
+    }
+  }, [measurementType, editingProduct]);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const [orderSearchTerm, setOrderSearchTerm] = useState("");
@@ -106,6 +121,7 @@ export const SupplierProducts: React.FC<SupplierProductsProps> = ({
 
     setIsSubmitting(true);
     try {
+      const dbMeasurementType = measurementType === "count" ? "Count Based" : measurementType === "weight" ? "Weight Based" : "Volume Based";
       const productData = {
         name,
         description,
@@ -114,12 +130,17 @@ export const SupplierProducts: React.FC<SupplierProductsProps> = ({
         unitCost: initialCost ? parseFloat(initialCost) : 0,
         imageUrl: imageUrl || `https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?q=80&w=400&auto=format&fit=crop`,
         status,
+        measurementType: dbMeasurementType,
+        baseUnit,
+        pricePerUnit: parseFloat(price),
         ...(editingProduct ? {} : {
-          stock: initialStock ? parseInt(initialStock) : 0,
+          stock: initialStock ? convertToSmallestUnit(parseFloat(initialStock), baseUnit) : 0,
           restockHistory: initialStock ? [{
-            quantityAdded: parseInt(initialStock),
+            quantityAdded: convertToSmallestUnit(parseFloat(initialStock), baseUnit),
+            displayQty: parseFloat(initialStock),
+            unit: baseUnit,
             unitCost: initialCost ? parseFloat(initialCost) : 0,
-            totalCost: (parseInt(initialStock)) * (initialCost ? parseFloat(initialCost) : 0),
+            totalCost: (parseFloat(initialStock)) * (initialCost ? parseFloat(initialCost) : 0),
             date: new Date().toISOString(),
             notes: "Initial inventory setup on creation"
           }] : []
@@ -154,6 +175,17 @@ export const SupplierProducts: React.FC<SupplierProductsProps> = ({
     setImageUrl(product.imageUrl || "");
     setInitialCost(product.unitCost?.toString() || "");
     setStatus(product.status || "active");
+
+    // Safely parse measurement types with backward compatibility fallbacks
+    const mTypeString = product.measurementType || "Count Based";
+    const normalizedType = (mTypeString === "Weight Based" || mTypeString === "weight")
+      ? "weight"
+      : (mTypeString === "Volume Based" || mTypeString === "volume")
+      ? "volume"
+      : "count";
+    setMeasurementType(normalizedType);
+    setBaseUnit(product.baseUnit || "Piece");
+
     setIsDialogOpen(true);
   };
 
@@ -182,6 +214,8 @@ export const SupplierProducts: React.FC<SupplierProductsProps> = ({
     setInitialStock("");
     setInitialCost("");
     setStatus("active");
+    setMeasurementType("count");
+    setBaseUnit("Piece");
   };
 
   const filteredProducts = products.filter(p => 
@@ -210,6 +244,8 @@ export const SupplierProducts: React.FC<SupplierProductsProps> = ({
   });
 
   const uniqueRetailers = Array.from(new Set(orders.map(o => o.retailerName))).filter(Boolean);
+
+  const compatibleUnits = UNIT_DEFINITIONS.filter(u => u.type === measurementType);
 
   return (
     <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -320,7 +356,9 @@ export const SupplierProducts: React.FC<SupplierProductsProps> = ({
                     <div className="mt-6 pt-6 border-t border-zinc-100 flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <Package className="h-3.5 w-3.5 text-zinc-400" />
-                        <span className="text-[9px] font-black uppercase tracking-widest text-zinc-500 italic">Inventory Confirmed</span>
+                        <span className="text-[9px] font-black uppercase tracking-widest text-zinc-500 italic">
+                          Stock: {formatStock(product.stock || 0, product.measurementType, product.baseUnit)}
+                        </span>
                       </div>
                     </div>
                   </CardContent>
@@ -520,11 +558,11 @@ export const SupplierProducts: React.FC<SupplierProductsProps> = ({
 
               <div className="grid grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-1">Unit Price</Label>
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-1">Unit Price ({currency})</Label>
                   <Input 
                     required
                     type="number"
-                    step="0.01"
+                    step="any"
                     placeholder="0.00"
                     value={price}
                     onChange={(e) => setPrice(e.target.value)}
@@ -548,12 +586,43 @@ export const SupplierProducts: React.FC<SupplierProductsProps> = ({
                 </div>
               </div>
 
+              <div className="grid grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-1">Measurement Strategy</Label>
+                  <Select value={measurementType} onValueChange={(val: any) => setMeasurementType(val)}>
+                    <SelectTrigger className="h-14 rounded-2xl bg-zinc-50 border-none font-bold uppercase text-[10px] tracking-widest text-zinc-900">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-2xl border-none shadow-2xl p-2">
+                      <SelectItem value="count" className="font-black uppercase text-[9px] tracking-widest py-3">Count Based</SelectItem>
+                      <SelectItem value="weight" className="font-black uppercase text-[9px] tracking-widest py-3">Weight Based</SelectItem>
+                      <SelectItem value="volume" className="font-black uppercase text-[9px] tracking-widest py-3">Volume Based</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-1">Base Pricing Unit</Label>
+                  <Select value={baseUnit} onValueChange={setBaseUnit}>
+                    <SelectTrigger className="h-14 rounded-2xl bg-zinc-50 border-none font-bold uppercase text-[10px] tracking-widest text-zinc-900">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-2xl border-none shadow-2xl p-2">
+                      {compatibleUnits.map(unit => (
+                        <SelectItem key={unit.name} value={unit.name} className="font-black uppercase text-[9px] tracking-widest py-3">
+                          {unit.name} ({unit.abbreviation})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
               {editingProduct ? (
                 <div className="space-y-2">
                   <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-1">Manufacturing Unit Cost ({currency})</Label>
                   <Input 
                     type="number"
-                    step="0.01"
+                    step="any"
                     min="0.00"
                     placeholder="e.g. 1.20"
                     value={initialCost}
@@ -564,9 +633,10 @@ export const SupplierProducts: React.FC<SupplierProductsProps> = ({
               ) : (
                 <div className="grid grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-1">Initial Stock Level</Label>
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-1">Initial Stock ({baseUnit})</Label>
                     <Input 
                       type="number"
+                      step="any"
                       min="0"
                       placeholder="e.g. 50"
                       value={initialStock}
@@ -575,10 +645,10 @@ export const SupplierProducts: React.FC<SupplierProductsProps> = ({
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-1">Manufacturing Unit Cost ({currency})</Label>
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-1">Manufacturing Cost ({currency})</Label>
                     <Input 
                       type="number"
-                      step="0.01"
+                      step="any"
                       min="0.00"
                       placeholder="e.g. 1.20"
                       value={initialCost}
