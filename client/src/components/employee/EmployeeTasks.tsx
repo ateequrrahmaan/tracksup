@@ -30,7 +30,11 @@ import {
   Coins, 
   ChevronRight, 
   Search,
-  Building
+  Building,
+  Check,
+  Info,
+  User,
+  Calendar
 } from "lucide-react";
 import { toast } from "sonner";
 import { Task, ChecklistItem } from "@/types";
@@ -61,6 +65,10 @@ export const EmployeeTasks: React.FC = () => {
   const [unitCost, setUnitCost] = useState<number>(0);
   const [paymentMethod, setPaymentMethod] = useState<"Paid" | "Credit">("Paid");
   const [itemNotes, setItemNotes] = useState<string>("");
+
+  // Complete Detail View state
+  const [selectedDetailTask, setSelectedDetailTask] = useState<Task | null>(null);
+  const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
 
   // Load employee specific tasks
   useEffect(() => {
@@ -382,22 +390,39 @@ export const EmployeeTasks: React.FC = () => {
                 >
                   <Card className="rounded-[2.2rem] border-none shadow-sm bg-white overflow-hidden flex flex-col h-full group hover:shadow-xl transition-all">
                     <CardHeader className="pb-4">
-                      <div className="flex flex-wrap gap-1.5 mb-2">
-                        <Badge className="font-extrabold uppercase text-[7px] px-2 py-0.5 rounded-full border-none bg-zinc-900 text-white">
-                          {task.taskType}
-                        </Badge>
-                        <Badge className={`font-black uppercase text-[7px] px-2 py-0.5 rounded-full border-none ${badgeColorClass}`}>
-                          {task.status.replace(/_/g, ' ')}
-                        </Badge>
-                        {task.priority && (
-                          <Badge variant={task.priority === "high" ? "destructive" : "outline"} className="text-[7px] font-black uppercase">
-                            {task.priority} Focus
-                          </Badge>
-                        )}
+                      <div className="flex justify-between items-start gap-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap gap-1.5 mb-2">
+                            <Badge className="font-extrabold uppercase text-[7px] px-2 py-0.5 rounded-full border-none bg-zinc-900 text-white">
+                              {task.taskType}
+                            </Badge>
+                            <Badge className={`font-black uppercase text-[7px] px-2 py-0.5 rounded-full border-none ${badgeColorClass}`}>
+                              {task.status.replace(/_/g, ' ')}
+                            </Badge>
+                            {task.priority && (
+                              <Badge variant={task.priority === "high" ? "destructive" : "outline"} className="text-[7px] font-black uppercase">
+                                {task.priority} Focus
+                              </Badge>
+                            )}
+                          </div>
+                          <CardTitle className="text-base font-black text-zinc-900 uppercase italic tracking-tight line-clamp-1 mt-1">
+                            {task.title}
+                          </CardTitle>
+                        </div>
+                        
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
+                            setSelectedDetailTask(task);
+                            setIsDetailDialogOpen(true);
+                          }}
+                          className="text-zinc-400 hover:text-zinc-900 h-9 w-9 rounded-full hover:bg-zinc-50 shrink-0 transition-colors"
+                          title="View Details"
+                        >
+                          <BookOpen className="h-4 w-4" />
+                        </Button>
                       </div>
-                      <CardTitle className="text-base font-black text-zinc-900 uppercase italic tracking-tight line-clamp-1 mt-1">
-                        {task.title}
-                      </CardTitle>
                     </CardHeader>
 
                     <CardContent className="flex-1 pb-4 space-y-4">
@@ -735,6 +760,220 @@ export const EmployeeTasks: React.FC = () => {
                 </Button>
               </DialogFooter>
             </form>
+          </DialogContent>
+        )}
+      </Dialog>
+
+      {/* Complete Task Details Dialog */}
+      <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}>
+        {selectedDetailTask && (
+          <DialogContent className="rounded-[2.5rem] p-10 border-none shadow-2xl sm:max-w-2xl max-h-[90vh] overflow-y-auto bg-white">
+            <DialogHeader className="border-b border-zinc-100 pb-6 mb-6">
+              <div className="flex flex-wrap items-center gap-2 mb-3">
+                <Badge className="font-extrabold uppercase text-[8px] tracking-[0.1em] px-2.5 py-1 rounded-full border-none bg-zinc-900 text-white">
+                  {selectedDetailTask.taskType}
+                </Badge>
+                <Badge className="font-black uppercase text-[8px] tracking-[0.05em] px-2.5 py-1 rounded-full border border-zinc-200 bg-zinc-50 text-zinc-700">
+                  {selectedDetailTask.status.replace(/_/g, ' ')}
+                </Badge>
+                {selectedDetailTask.priority && (
+                  <Badge variant={selectedDetailTask.priority === "high" ? "destructive" : "outline"} className="text-[8px] font-extrabold uppercase py-0.5 px-2">
+                    {selectedDetailTask.priority} Focus
+                  </Badge>
+                )}
+              </div>
+              <DialogTitle className="text-3xl font-black uppercase italic tracking-tighter text-zinc-950">
+                {selectedDetailTask.title}
+              </DialogTitle>
+              <DialogDescription className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mt-2">
+                Operational Ledger Objective Factsheet
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-6">
+              {/* Objective description */}
+              {selectedDetailTask.description && (
+                <div className="bg-zinc-50 rounded-2xl p-4 border border-zinc-100">
+                  <span className="text-[9px] font-black uppercase tracking-wider text-zinc-400 block mb-1">Target Description</span>
+                  <p className="text-zinc-700 text-xs leading-relaxed whitespace-pre-wrap font-medium">
+                    {selectedDetailTask.description}
+                  </p>
+                </div>
+              )}
+
+              {/* Assignment details */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="flex items-center gap-3 bg-zinc-50 rounded-2xl p-4 border border-zinc-100">
+                  <div className="h-10 w-10 rounded-full bg-zinc-200 flex items-center justify-center text-zinc-650 shrink-0">
+                    <User className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <span className="text-[8px] font-black uppercase text-zinc-400 tracking-wider">Assigned Crew Member</span>
+                    <p className="text-sm font-black text-zinc-800">{selectedDetailTask.employeeName}</p>
+                    <p className="text-[9px] font-bold text-zinc-400 shrink-0 select-all">{selectedDetailTask.employeeId}</p>
+                  </div>
+                </div>
+
+                {selectedDetailTask.dueDate && (
+                  <div className="flex items-center gap-3 bg-zinc-50 rounded-2xl p-4 border border-zinc-100">
+                    <div className="h-10 w-10 rounded-full bg-zinc-200 flex items-center justify-center text-zinc-650 shrink-0">
+                      <Calendar className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <span className="text-[8px] font-black uppercase text-zinc-400 tracking-wider">Operational Limit Due</span>
+                      <p className="text-sm font-black text-zinc-800">{selectedDetailTask.dueDate}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Checklist specific facts */}
+              {selectedDetailTask.taskType === "checklist" && (
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center text-[10px] uppercase font-black text-zinc-400">
+                    <span>Task Checklist Progress</span>
+                    <span className="text-zinc-800 font-extrabold">
+                      {selectedDetailTask.checklist?.filter(i => i.completed).length || 0} / {selectedDetailTask.checklist?.length || 0} Done
+                    </span>
+                  </div>
+                  <div className="w-full bg-zinc-100 h-2 rounded-full overflow-hidden">
+                    <div 
+                      className="bg-zinc-900 h-full transition-all duration-300"
+                      style={{ 
+                        width: `${((selectedDetailTask.checklist?.filter(i => i.completed).length || 0) / (selectedDetailTask.checklist?.length || 1)) * 100}%` 
+                      }}
+                    />
+                  </div>
+                  <div className="border border-zinc-100 rounded-3xl overflow-hidden divide-y divide-zinc-50 bg-white">
+                    {selectedDetailTask.checklist?.map((item, idx) => (
+                      <div key={idx} className="flex items-center gap-3 p-4">
+                        <div className={`h-5 w-5 rounded-md border flex items-center justify-center shrink-0 ${
+                          item.completed ? "bg-zinc-900 border-zinc-900 text-white" : "border-zinc-300 bg-white"
+                        }`}>
+                          {item.completed && <Check className="h-3 w-3" />}
+                        </div>
+                        <span className={`text-xs font-semibold ${item.completed ? "line-through text-zinc-400" : "text-zinc-750"}`}>
+                          {item.text}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Procurement specific facts */}
+              {selectedDetailTask.taskType === "procurement" && (
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center text-[10px] uppercase font-black text-zinc-400">
+                    <span>Invoiced Procurement Items</span>
+                    <span className="text-zinc-800 font-black">{selectedDetailTask.vendorName || "Multiple Vendors"}</span>
+                  </div>
+
+                  <div className="border border-zinc-100 rounded-3xl overflow-hidden divide-y divide-zinc-50 bg-white shadow-sm">
+                    {selectedDetailTask.items?.map((pItem, idx) => {
+                      const qtyRequested = pItem.quantity;
+                      const qtyPurchased = pItem.purchasedQuantity;
+                      const rateCost = pItem.purchaseCost || 0;
+                      const subTotal = (qtyPurchased ?? qtyRequested) * rateCost;
+                      
+                      return (
+                        <div key={idx} className="p-4 bg-white hover:bg-zinc-50 transition-colors space-y-2">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <h5 className="font-black text-zinc-900 uppercase italic text-sm">{pItem.productName}</h5>
+                              <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider mt-0.5">
+                                Vendor: {pItem.vendorName || selectedDetailTask.vendorName}
+                              </p>
+                            </div>
+                            {rateCost > 0 && (
+                              <div className="text-right">
+                                <span className="font-black text-zinc-900 italic tracking-tighter">
+                                  {formatCurrency(subTotal, preferredCurrency)}
+                                </span>
+                                <p className="text-[9px] font-bold text-zinc-400 uppercase">
+                                  {qtyPurchased ?? qtyRequested} {pItem.unit || "Piece"} @ {formatCurrency(rateCost, preferredCurrency)}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                          
+                          {/* More facts for product purchase */}
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-zinc-50 text-[9px] uppercase font-black text-zinc-500">
+                            <div>
+                              <span className="text-zinc-400 block mb-0.5">Requirement</span>
+                              <span className="text-zinc-700">{qtyRequested} {pItem.unit || "Piece"}</span>
+                            </div>
+                            <div>
+                              <span className="text-zinc-400 block mb-0.5">Purchased</span>
+                              <span className="text-zinc-700">{qtyPurchased !== undefined ? `${qtyPurchased} ${pItem.unit || "Piece"}` : "-"}</span>
+                            </div>
+                            {pItem.sellingPrice !== undefined && (
+                              <div>
+                                <span className="text-zinc-400 block mb-0.5">Selling Price</span>
+                                <span className="text-zinc-700">{formatCurrency(pItem.sellingPrice, preferredCurrency)}</span>
+                              </div>
+                            )}
+                            {pItem.warehouseLocation && (
+                              <div>
+                                <span className="text-zinc-400 block mb-0.5">Aisle / Bin</span>
+                                <span className="text-zinc-700">{pItem.warehouseLocation}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Calculations Fact Sheet */}
+                  {selectedDetailTask.items && (
+                    <div className="bg-zinc-900 text-white p-5 rounded-3xl flex justify-between items-center">
+                      <div>
+                        <span className="font-black uppercase text-[10px] tracking-[0.2em] italic opacity-50 block">Investment Value</span>
+                        <span className="text-[10px] font-bold opacity-75">
+                          Calculated from log entries ({selectedDetailTask.paymentStatus || "Paid"} layout)
+                        </span>
+                      </div>
+                      <span className="text-2xl font-black italic tracking-tighter col-span-1">
+                        {formatCurrency(
+                          selectedDetailTask.items.reduce((sum, item) => sum + ((item.purchasedQuantity ?? item.quantity) * (item.purchaseCost ?? 0)), 0),
+                          preferredCurrency
+                        )}
+                      </span>
+                    </div>
+                  )}
+
+                  {selectedDetailTask.employeeNotes && (
+                    <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 text-xs font-semibold text-amber-900">
+                      <b className="uppercase tracking-wider text-[10px] text-amber-700 block mb-1">Purchaser Remarks</b>
+                      "{selectedDetailTask.employeeNotes}"
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {/* Ledger metadata */}
+              <div className="pt-4 border-t border-zinc-100 flex justify-between text-[9px] uppercase font-bold text-zinc-400">
+                <span>Directives system identifier: {selectedDetailTask.id}</span>
+                {selectedDetailTask.createdAt && (
+                  <span>
+                    Logged: {selectedDetailTask.createdAt.toDate?.().toLocaleString() || new Date(selectedDetailTask.createdAt.seconds * 1000).toLocaleString()}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <DialogFooter className="mt-8">
+              <Button 
+                onClick={() => {
+                  setIsDetailDialogOpen(false);
+                  setSelectedDetailTask(null);
+                }}
+                className="w-full h-14 rounded-2xl bg-zinc-900 text-white font-black uppercase text-[10px] tracking-widest hover:bg-zinc-800 shadow-xl"
+              >
+                Close Factsheet View
+              </Button>
+            </DialogFooter>
           </DialogContent>
         )}
       </Dialog>

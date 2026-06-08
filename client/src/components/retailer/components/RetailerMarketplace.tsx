@@ -490,27 +490,27 @@ export const RetailerMarketplace: React.FC<RetailerMarketplaceProps> = ({ initia
                   className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                   referrerPolicy="no-referrer"
                 />
-                <div className="absolute top-4 left-4">
-                  <Badge className="bg-white/90 backdrop-blur-md text-zinc-900 font-black uppercase text-[8px] tracking-[0.2em] px-3 py-1 rounded-lg border-none shadow-sm">
+                <div className="absolute top-4 left-4 right-4 flex justify-between items-start gap-2 flex-wrap pointer-events-none">
+                  <Badge className="bg-white/90 backdrop-blur-md text-zinc-900 font-black uppercase text-[8px] tracking-[0.2em] px-3 py-1 rounded-lg border-none shadow-sm pointer-events-auto">
                     {product.supplierName}
                   </Badge>
-                </div>
-                <div className="absolute top-4 right-4">
-                  {product.stock !== undefined ? (
-                    product.stock > 0 ? (
-                      <Badge className="bg-emerald-500/90 backdrop-blur-md text-white font-black uppercase text-[8px] tracking-[0.2em] px-3 py-1.5 rounded-lg border-none shadow-sm flex items-center gap-1.5 font-bold">
-                        <Package className="h-3 w-3" /> Stock: {formatStock(product.stock, product.measurementType, product.baseUnit)}
-                      </Badge>
+                  <div className="pointer-events-auto">
+                    {product.stock !== undefined ? (
+                      product.stock > 0 ? (
+                        <Badge className="bg-emerald-500/90 backdrop-blur-md text-white font-black uppercase text-[8px] tracking-[0.2em] px-3 py-1.5 rounded-lg border-none shadow-sm flex items-center gap-1.5 font-bold">
+                          <Package className="h-3 w-3" /> Stock: {formatStock(product.stock, product.measurementType, product.baseUnit)}
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-rose-500/90 backdrop-blur-md text-white font-black uppercase text-[8px] tracking-[0.2em] px-3 py-1.5 rounded-lg border-none shadow-sm flex items-center gap-1.5 animate-pulse font-bold">
+                          <AlertCircle className="h-3 w-3" /> Out of Stock
+                        </Badge>
+                      )
                     ) : (
-                      <Badge className="bg-rose-500/90 backdrop-blur-md text-white font-black uppercase text-[8px] tracking-[0.2em] px-3 py-1.5 rounded-lg border-none shadow-sm flex items-center gap-1.5 animate-pulse font-bold">
-                        <AlertCircle className="h-3 w-3" /> Out of Stock
+                      <Badge className="bg-emerald-500/90 backdrop-blur-md text-white font-black uppercase text-[8px] tracking-[0.2em] px-3 py-1.5 rounded-lg border-none shadow-sm flex items-center gap-1.5 font-bold">
+                        <Package className="h-3 w-3" /> Available
                       </Badge>
-                    )
-                  ) : (
-                    <Badge className="bg-emerald-500/90 backdrop-blur-md text-white font-black uppercase text-[8px] tracking-[0.2em] px-3 py-1.5 rounded-lg border-none shadow-sm flex items-center gap-1.5 font-bold">
-                      <Package className="h-3 w-3" /> Available
-                    </Badge>
-                  )}
+                    )}
+                  </div>
                 </div>
                 <div className="absolute bottom-4 right-4 animate-in fade-in">
                   <Badge className="bg-zinc-900/80 backdrop-blur-md text-white font-black uppercase text-[10px] tracking-widest px-4 py-1.5 rounded-xl border-none font-bold">
