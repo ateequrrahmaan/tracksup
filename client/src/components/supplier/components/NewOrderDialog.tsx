@@ -157,13 +157,18 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
     setIsSubmitting(true);
     try {
       // Remove local productId before submitting items to backend service
-      const cleanItems: any[] = orderItems.map(({ name, quantity, price, selectedUnit, displayQuantity }) => ({
-        name,
-        quantity, // smallest units for backend stock deduction
-        price,
-        unit: selectedUnit || "Piece",
-        displayQty: displayQuantity ?? quantity
-      }));
+       const cleanItems: any[] = orderItems.map((item) => {
+        const prod = products.find(p => p.id === item.productId);
+        return {
+          productId: item.productId,
+          name: item.name,
+          quantity: item.quantity, // smallest units for backend stock deduction
+          price: item.price,
+          unit: item.selectedUnit || "Piece",
+          baseUnit: prod?.baseUnit || "Piece",
+          displayQty: item.displayQuantity ?? item.quantity
+        };
+      });
 
       await onSubmit({
         retailerId: selectedRetailerId,

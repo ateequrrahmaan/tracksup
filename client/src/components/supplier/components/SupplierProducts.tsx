@@ -18,7 +18,7 @@ import { Search, Plus, Package, Edit2, Trash2, Image as ImageIcon, Loader2, Shop
 import { toast } from "sonner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
-import { UNIT_DEFINITIONS, convertToSmallestUnit, formatStock } from "@/lib/measurements";
+import { UNIT_DEFINITIONS, convertToSmallestUnit, formatStock, findUnitDefinition } from "@/lib/measurements";
 
 interface SupplierProductsProps {
   orders: Order[];
@@ -448,12 +448,18 @@ export const SupplierProducts: React.FC<SupplierProductsProps> = ({
                     </TableCell>
                     <TableCell className="px-10">
                       <div className="space-y-1.5">
-                        {order.items?.map((item, idx) => (
-                          <div key={idx} className="flex items-center gap-2">
-                             <div className="h-1.5 w-1.5 rounded-full bg-zinc-900" />
-                             <span className="text-[10px] font-black uppercase italic tracking-tighter text-zinc-700">{item.name} <span className="text-zinc-300 mx-1">×</span> {item.quantity}</span>
-                          </div>
-                        ))}
+                        {order.items?.map((item, idx) => {
+                          const hasMeasurements = item.displayQty !== undefined && item.unit !== undefined;
+                          const qtyStr = hasMeasurements
+                            ? `${item.displayQty} ${item.unit}`
+                            : `${item.quantity} Piece`;
+                          return (
+                            <div key={idx} className="flex items-center gap-2">
+                               <div className="h-1.5 w-1.5 rounded-full bg-zinc-900" />
+                               <span className="text-[10px] font-black uppercase italic tracking-tighter text-zinc-700">{item.name} <span className="text-zinc-300 mx-1">×</span> {qtyStr}</span>
+                            </div>
+                          );
+                        })}
                       </div>
                     </TableCell>
                     <TableCell className="px-10">

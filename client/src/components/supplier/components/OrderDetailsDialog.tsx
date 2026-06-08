@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { CheckCircle, Clock, Truck, Store, Users } from "lucide-react";
+import { findUnitDefinition } from "@/lib/measurements";
 
 interface OrderDetailsDialogProps {
   order: Order | null;
@@ -66,15 +67,38 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({ order, e
           <div className="space-y-4">
             <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-400 italic">Inventory Manifest</h3>
             <div className="border border-zinc-100 rounded-3xl overflow-hidden divide-y divide-zinc-50">
-              {order.items.map((item, idx) => (
-                <div key={idx} className="flex items-center justify-between p-4 bg-white hover:bg-zinc-50 transition-colors">
-                  <div className="flex flex-col">
-                    <span className="font-black text-zinc-900 uppercase italic text-sm">{item.name}</span>
-                    <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">{item.quantity} units @ {formatCurrency(item.price, preferredCurrency)}</span>
+              {order.items.map((item, idx) => {
+                const hasMeasurements = item.displayQty !== undefined && item.unit !== undefined;
+                const qtyStr = hasMeasurements
+                  ? `${item.displayQty} ${item.unit}`
+                  : `${item.quantity} Piece`;
+                
+                const baseUnitDef = findUnitDefinition(item.baseUnit || "Piece");
+                const orderedUnitDef = findUnitDefinition(item.unit || "Piece");
+                const multiplierRatio = orderedUnitDef.multiplier / baseUnitDef.multiplier;
+                
+                const rateDisplayStr = hasMeasurements
+                  ? `${formatCurrency(item.price, preferredCurrency)} / ${item.baseUnit || "Piece"}`
+                  : `${formatCurrency(item.price, preferredCurrency)}`;
+
+                const lineTotal = hasMeasurements
+                  ? item.displayQty * multiplierRatio * item.price
+                  : item.price * item.quantity;
+
+                return (
+                  <div key={idx} className="flex items-center justify-between p-4 bg-white hover:bg-zinc-50 transition-colors">
+                    <div className="flex flex-col">
+                      <span className="font-black text-zinc-900 uppercase italic text-sm">{item.name}</span>
+                      <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">
+                        {qtyStr} @ {rateDisplayStr}
+                      </span>
+                    </div>
+                    <span className="font-black text-zinc-900 italic tracking-tighter">
+                      {formatCurrency(lineTotal, preferredCurrency)}
+                    </span>
                   </div>
-                  <span className="font-black text-zinc-900 italic tracking-tighter">{formatCurrency(item.quantity * item.price, preferredCurrency)}</span>
-                </div>
-              ))}
+                );
+              })}
               <div className="flex items-center justify-between p-6 bg-zinc-900 text-white">
                 <span className="font-black uppercase text-[10px] tracking-[0.2em] italic opacity-50">Total Capital Value ({preferredCurrency})</span>
                 <span className="text-2xl font-black italic tracking-tighter">{formatCurrency(order.totalAmount, preferredCurrency)}</span>

@@ -21,6 +21,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { formatCurrency, getCurrencySymbol } from "@/constants";
 import { DashboardLayout } from "../shared/DashboardLayout";
 import api from "@/services/api";
+import { findUnitDefinition } from "@/lib/measurements";
 
 const getPaymentBadge = (status?: string) => {
   switch (status) {
@@ -104,12 +105,26 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ order, isOpen, onOp
           <div className="border rounded-lg p-4 bg-zinc-50/50">
             <h4 className="text-xs font-bold text-zinc-600 uppercase tracking-wider mb-3">Order Breakdown</h4>
             <div className="space-y-2">
-              {order.items?.map((item, idx) => (
-                <div key={`modal-item-${idx}`} className="flex justify-between text-sm">
-                  <span className="text-zinc-700">{item.name} × {item.quantity}</span>
-                  <span className="font-medium">{formatCurrency(item.price * item.quantity, order.currency)}</span>
-                </div>
-              ))}
+              {order.items?.map((item, idx) => {
+                const hasMeasurements = item.displayQty !== undefined && item.unit !== undefined;
+                const qtyStr = hasMeasurements
+                  ? `${item.displayQty} ${item.unit}`
+                  : `${item.quantity} Piece`;
+                
+                const baseUnitDef = findUnitDefinition(item.baseUnit || "Piece");
+                const orderedUnitDef = findUnitDefinition(item.unit || "Piece");
+                const multiplierRatio = orderedUnitDef.multiplier / baseUnitDef.multiplier;
+                const lineTotal = hasMeasurements
+                  ? item.displayQty * multiplierRatio * item.price
+                  : item.price * item.quantity;
+
+                return (
+                  <div key={`modal-item-${idx}`} className="flex justify-between text-sm">
+                    <span className="text-zinc-700">{item.name} × {qtyStr}</span>
+                    <span className="font-medium">{formatCurrency(lineTotal, order.currency)}</span>
+                  </div>
+                );
+              })}
               <div className="pt-2 border-t flex justify-between font-bold text-zinc-900">
                 <span>Total Amount</span>
                 <span>{formatCurrency(order.totalAmount, order.currency)}</span>
@@ -226,17 +241,38 @@ const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({ order, orgNam
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {order.items?.map((item, idx) => (
-                    <TableRow key={`invoice-item-${idx}`} className="border-b border-zinc-50">
-                      <TableCell className="py-6">
-                        <p className="font-black italic uppercase text-xs text-zinc-900">{item.name}</p>
-                        <p className="text-[9px] text-zinc-400 font-bold uppercase tracking-widest mt-1">Logistics Unit</p>
-                      </TableCell>
-                      <TableCell className="text-center font-bold text-sm">{item.quantity}</TableCell>
-                      <TableCell className="text-right font-bold text-sm">{symbol}{item.price.toFixed(2)}</TableCell>
-                      <TableCell className="text-right font-black italic text-sm">{symbol}{(item.quantity * item.price).toFixed(2)}</TableCell>
-                    </TableRow>
-                  ))}
+                  {order.items?.map((item, idx) => {
+                    const hasMeasurements = item.displayQty !== undefined && item.unit !== undefined;
+                    const qtyStr = hasMeasurements
+                      ? `${item.displayQty} ${item.unit}`
+                      : `${item.quantity} Piece`;
+                    
+                    const baseUnitDef = findUnitDefinition(item.baseUnit || "Piece");
+                    const orderedUnitDef = findUnitDefinition(item.unit || "Piece");
+                    const multiplierRatio = orderedUnitDef.multiplier / baseUnitDef.multiplier;
+                    
+                    const rateDisplayStr = hasMeasurements
+                      ? `${symbol}${item.price.toFixed(2)} / ${item.baseUnit || "Piece"}`
+                      : `${symbol}${item.price.toFixed(2)}`;
+
+                    const lineTotal = hasMeasurements
+                      ? item.displayQty * multiplierRatio * item.price
+                      : item.price * item.quantity;
+
+                    return (
+                      <TableRow key={`invoice-item-${idx}`} className="border-b border-zinc-50">
+                        <TableCell className="py-6">
+                          <p className="font-black italic uppercase text-xs text-zinc-900">{item.name}</p>
+                          <p className="text-[9px] text-zinc-400 font-bold uppercase tracking-widest mt-1">
+                            {hasMeasurements ? `Category: ${item.unit}` : "Logistics Unit"}
+                          </p>
+                        </TableCell>
+                        <TableCell className="text-center font-bold text-sm">{qtyStr}</TableCell>
+                        <TableCell className="text-right font-bold text-sm">{rateDisplayStr}</TableCell>
+                        <TableCell className="text-right font-black italic text-sm">{symbol}{lineTotal.toFixed(2)}</TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
              </Table>
           </div>
@@ -417,12 +453,31 @@ export const RetailerDashboard = () => {
 
     const symbol = getCurrencySymbol(order.currency);
 
-    const tableData = order.items?.map((item: any) => [
-      item.name,
-      item.quantity,
-      `${symbol}${item.price.toFixed(2)}`,
-      `${symbol}${(item.quantity * item.price).toFixed(2)}`
-    ]) || [];
+    const tableData = order.items?.map((item: any) => {
+      const hasMeasurements = item.displayQty !== undefined && item.unit !== undefined;
+      const qtyStr = hasMeasurements
+        ? `${item.displayQty} ${item.unit}`
+        : `${item.quantity}`;
+      
+      const baseUnitDef = findUnitDefinition(item.baseUnit || "Piece");
+      const orderedUnitDef = findUnitDefinition(item.unit || "Piece");
+      const multiplierRatio = orderedUnitDef.multiplier / baseUnitDef.multiplier;
+      
+      const priceStr = hasMeasurements
+         ? `${symbol}${item.price.toFixed(2)} / ${item.baseUnit}`
+         : `${symbol}${item.price.toFixed(2)}`;
+
+      const lineTotal = hasMeasurements
+        ? item.displayQty * multiplierRatio * item.price
+        : item.price * item.quantity;
+
+      return [
+        item.name,
+        qtyStr,
+        priceStr,
+        `${symbol}${lineTotal.toFixed(2)}`
+      ];
+    }) || [];
 
     autoTable(doc, {
       startY: 80,
